@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>家用品 余量</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f0ebe0;
+  --surface:#fdfaf3;
+  --surface2:#f4efe4;
+  --surface3:#ece6d8;
+  --border:#ddd4c2;
+  --border2:#ccc0ac;
+  --text:#25201a;
+  --text2:#68594c;
+  --muted:#9c8c7c;
+  --green:#2e6448;
+  --green-l:#e4f0ea;
+  --green-m:rgba(46,100,72,.15);
+  --amber:#8a5e14;
+  --amber-l:#fdf2dc;
+  --red:#9c3428;
+  --red-l:#fceeed;
+  --shadow:rgba(40,28,16,.07);
+  --shadow2:rgba(40,28,16,.13);
+  --tab-h:58px;
+
+  /* ── 字号缩放系数：改这一个数字，全局字号等比缩放 ── */
+  --s: 1.18;
+
+  /* 字号阶梯（单位 px，乘以 --s 后生效） */
+  --f-xs:   calc(9px  * var(--s));   /* 辅助标签、角标 */
+  --f-sm:   calc(10px * var(--s));   /* 次要信息 */
+  --f-base: calc(12px * var(--s));   /* 正文 */
+  --f-md:   calc(13px * var(--s));   /* 稍大正文、按钮 */
+  --f-lg:   calc(15px * var(--s));   /* 小标题 */
+  --f-xl:   calc(17px * var(--s));   /* 顶栏标题 */
+  --f-2xl:  calc(19px * var(--s));   /* 详情品名 */
+  --f-3xl:  calc(22px * var(--s));   /* 仪表盘数字 */
+  --f-4xl:  calc(26px * var(--s));   /* 详情余量大字 */
+}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--text);display:flex;flex-direction:column;font-size:var(--f-base);}
+
+/* ── screens ── */
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;transform:translateX(14px);overflow:hidden;}
+.screen.active{opacity:1;pointer-events:all;transform:translateX(0);}
+.screen.out{opacity:0;transform:translateX(-14px);}
+
+/* ── topbar ── */
+.topbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:13px 16px 10px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-family:'Noto Serif SC',serif;font-size:var(--f-xl);font-weight:400;letter-spacing:.05em;}
+.tb-back{display:flex;align-items:center;gap:4px;font-size:var(--f-sm);color:var(--text2);cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:.04em;padding:4px;}
+.ib{width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:background .14s;}
+.ib:hover{background:var(--border);}
+
+/* ── bottom tab bar ── */
+.tab-bar{flex-shrink:0;display:flex;background:var(--surface);border-top:1px solid var(--border);height:var(--tab-h);position:relative;z-index:20;}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:color .15s;color:var(--muted);-webkit-tap-highlight-color:transparent;}
+.tab-item.active{color:var(--green);}
+.tab-icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.tab-label{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.06em;}
+.tab-ink{position:absolute;bottom:0;height:2px;background:var(--green);border-radius:99px 99px 0 0;transition:left .2s ease,width .2s ease;}
+
+/* ── scroll ── */
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+.scroll::-webkit-scrollbar{width:0;}
+
+/* ── alert ── */
+.alert{flex-shrink:0;display:flex;align-items:center;gap:7px;padding:7px 16px;font-size:var(--f-base);font-family:'DM Mono',monospace;letter-spacing:.03em;}
+.alert.red{background:var(--red-l);color:var(--red);}
+.alert.amber{background:var(--amber-l);color:var(--amber);}
+.alert-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+/* ── deduct toast ── */
+.deduct-toast{position:fixed;top:0;left:0;right:0;z-index:300;background:var(--surface);border-bottom:2px solid var(--green);padding:11px 16px 11px;transform:translateY(-100%);transition:transform .3s ease;box-shadow:0 4px 18px var(--shadow2);}
+.deduct-toast.show{transform:translateY(0);}
+.dt-title{font-size:var(--f-base);font-family:'DM Mono',monospace;color:var(--green);letter-spacing:.07em;margin-bottom:3px;}
+.dt-body{font-size:var(--f-sm);color:var(--text2);line-height:1.6;}
+.dt-close{position:absolute;top:9px;right:13px;font-size:var(--f-xl);color:var(--muted);cursor:pointer;}
+
+/* ════════════════════════════
+   DASHBOARD TAB
+════════════════════════════ */
+.dash-scroll{padding:14px 14px 80px;}
+
+/* summary row */
+.dash-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+.dash-sum-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center;box-shadow:0 1px 6px var(--shadow);}
+.dash-sum-val{font-size:var(--f-3xl)!important;font-weight:300;font-family:'DM Mono',monospace;letter-spacing:-.02em;line-height:1;}
+.dash-sum-val.red{color:var(--red);font-size:var(--f-3xl)!important;}
+.dash-sum-val.amber{color:var(--amber);font-size:var(--f-3xl)!important;}
+.dash-sum-val.green{color:var(--green);font-size:var(--f-3xl)!important;}
+.dash-sum-label{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+
+/* section title */
+.dash-sec-title{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+
+/* alert items */
+.alert-item{display:flex;align-items:center;gap:11px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:7px;cursor:pointer;transition:box-shadow .14s;}
+.alert-item:hover{box-shadow:0 2px 10px var(--shadow2);}
+.alert-item-icon{width:36px;height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.alert-item-info{flex:1;min-width:0;}
+.alert-item-name{font-size:var(--f-md);font-weight:400;}
+.alert-item-reason{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px;letter-spacing:.03em;}
+.alert-item-tag{flex-shrink:0;font-size:var(--f-xs);font-family:'DM Mono',monospace;padding:3px 7px;border-radius:99px;letter-spacing:.04em;}
+.alert-item-tag.red{background:var(--red);color:#fff;}
+.alert-item-tag.amber{background:var(--amber);color:#fff;}
+
+/* compact list on dashboard */
+.dash-list{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.dl-row{display:flex;align-items:center;padding:9px 12px;gap:10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;}
+.dl-row:last-child{border-bottom:none;}
+.dl-row:hover{background:var(--surface2);}
+.dl-icon{width:28px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.dl-info{flex:1;min-width:0;}
+.dl-name{font-size:var(--f-base);line-height:1.3;}
+.dl-cap{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);margin-top:1px;}
+.dl-bar-wrap{width:80px;flex-shrink:0;}
+.dl-bar{height:4px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:3px;}
+.dl-bar-fill{height:100%;border-radius:99px;}
+.dl-pct{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);text-align:right;}
+.dl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dl-dot.g{background:var(--green);}
+.dl-dot.a{background:var(--amber);}
+.dl-dot.r{background:var(--red);}
+
+/* ════════════════════════════
+   GALLERY TAB
+════════════════════════════ */
+.cat-label{padding:15px 14px 8px;font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 12px 14px;}
+
+.gcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 9px 11px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;position:relative;transition:transform .14s;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 6px var(--shadow);}
+.gcard:active{transform:scale(.96);}
+.gcard.warn-low{border-color:rgba(156,52,40,.22);background:#fdfaf8;}
+.gcard.warn-exp{border-color:rgba(138,94,20,.22);}
+
+.gcard-badges{position:absolute;top:-7px;right:7px;display:flex;gap:3px;z-index:2;}
+.bdg{font-size:var(--f-xs);font-family:'DM Mono',monospace;padding:2px 5px;border-radius:99px;font-weight:500;letter-spacing:.04em;white-space:nowrap;}
+.bdg.r{background:var(--red);color:#fff;}
+.bdg.a{background:var(--amber);color:#fff;}
+.bdg.g{background:var(--surface3);color:var(--green);border:1px solid var(--green-m);}
+
+.illus-wrap{position:relative;flex-shrink:0;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;}
+.stock-pip{position:absolute;bottom:-4px;right:-6px;font-size:var(--f-xs);font-family:'DM Mono',monospace;padding:1px 5px;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.15);letter-spacing:.02em;}
+.stock-pip.has{background:var(--text);color:#fff;}
+.stock-pip.none{background:var(--red);color:#fff;}
+
+.gcard-name{font-size:var(--f-base);text-align:center;line-height:1.3;}
+.gcard-brand{font-size:var(--f-xs);color:var(--muted);font-family:'DM Mono',monospace;}
+.gcard-cap{font-size:var(--f-xs);color:var(--text2);font-family:'DM Mono',monospace;letter-spacing:.02em;}
+.gcard-cap.low{color:var(--red);}
+.gcard-cap.empty{color:var(--muted);font-style:italic;}
+
+/* ════════════════════════════
+   DETAIL
+════════════════════════════ */
+.d-hero{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 14px;display:flex;gap:14px;}
+.d-illus{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:ns-resize;}
+.d-illus-hint{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.06em;}
+.d-name{font-family:'Noto Serif SC',serif;font-size:var(--f-2xl);font-weight:400;letter-spacing:.04em;margin-bottom:1px;}
+.d-brand{font-size:var(--f-sm);color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.06em;margin-bottom:10px;}
+.d-val-row{display:flex;align-items:baseline;gap:4px;}
+.d-val-big{font-size:var(--f-4xl);font-weight:300;font-family:'DM Mono',monospace;letter-spacing:-.02em;line-height:1;}
+.d-val-big.low{color:var(--red);}
+.d-val-unit{font-size:var(--f-base);color:var(--muted);}
+.d-val-total{font-size:var(--f-base);color:var(--muted);font-family:'DM Mono',monospace;}
+.d-val-pct{font-size:var(--f-base);color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;}
+
+/* usage open chips */
+.usage-area{margin-top:11px;}
+.usage-label{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.ob-row{display:flex;gap:5px;flex-wrap:wrap;}
+.ob-chip{display:flex;align-items:center;gap:4px;padding:3px 7px 3px 5px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--text2);}
+.ob-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.ob-dot.e{background:var(--border2);}
+.d-action-btns{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
+.d-act-btn{font-size:var(--f-sm);font-family:'DM Mono',monospace;padding:4px 10px;border-radius:7px;cursor:pointer;letter-spacing:.04em;transition:all .13s;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);}
+.d-act-btn.primary{background:var(--green-l);color:var(--green);border-color:var(--green-m);}
+.d-act-btn.danger{background:var(--red-l);color:var(--red);border-color:rgba(156,52,40,.2);}
+.d-act-btn:disabled{opacity:.35;cursor:default;}
+
+/* shelf */
+.d-sec{padding:12px 14px;border-bottom:1px solid var(--border);}
+.d-sec-title{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.shelf{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+.shelf-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative;}
+.shelf-item:hover .shelf-take{opacity:1;}
+.shelf-item:hover .shelf-bottle{transform:translateY(-3px);}
+.shelf-bottle{transition:transform .15s;}
+.shelf-take{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--green);letter-spacing:.04em;white-space:nowrap;opacity:0;transition:opacity .15s;}
+.shelf-lbl{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);}
+.shelf-add{width:42px;height:56px;border:1.5px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:var(--f-xl);transition:all .15s;}
+.shelf-add:hover{border-color:var(--green);background:var(--green-l);color:var(--green);}
+
+/* supp card */
+.supp-row{display:flex;align-items:center;gap:10px;background:var(--green-l);border:1px solid var(--green-m);border-radius:8px;padding:8px 12px;margin-top:8px;cursor:pointer;transition:background .14s;}
+.supp-row:hover{background:#d4eadc;}
+.supp-name{font-size:var(--f-base);color:var(--green);font-weight:500;}
+.supp-spec{font-size:var(--f-xs);color:var(--text2);font-family:'DM Mono',monospace;margin-top:1px;}
+.supp-cta{margin-left:auto;font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--green);background:#fff;padding:3px 8px;border-radius:99px;border:1px solid var(--green-m);white-space:nowrap;}
+
+/* detail rows */
+.d-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;}
+.d-row-label{font-size:var(--f-base);color:var(--text2);}
+.d-row-val{font-size:var(--f-base);font-family:'DM Mono',monospace;color:var(--text);}
+.d-row-val.red{color:var(--red);}
+.d-row-val.amber{color:var(--amber);}
+.d-row-val.green{color:var(--green);}
+.rate-inp{width:48px;padding:3px 6px;border:1px solid var(--border2);border-radius:5px;font-size:var(--f-base);font-family:'DM Mono',monospace;background:var(--surface2);color:var(--text);text-align:right;outline:none;}
+.exp-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;font-size:var(--f-sm);font-family:'DM Mono',monospace;}
+.exp-chip.ok{background:var(--green-l);color:var(--green);}
+.exp-chip.soon{background:var(--amber-l);color:var(--amber);}
+.exp-chip.urgent{background:var(--red-l);color:var(--red);}
+
+/* log */
+.log-row{display:flex;align-items:baseline;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);}
+.log-row:last-child{border-bottom:none;}
+.log-type{width:30px;font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);}
+.log-desc{flex:1;font-size:var(--f-base);color:var(--text2);}
+.log-delta{font-size:var(--f-base);font-family:'DM Mono',monospace;}
+.log-delta.pos{color:var(--green);}
+.log-delta.neg{color:var(--muted);}
+.log-date{font-size:var(--f-xs);color:var(--muted);font-family:'DM Mono',monospace;}
+
+/* ════════════════════════════
+   SHEET
+════════════════════════════ */
+.sheet-mask{position:fixed;inset:0;background:rgba(28,20,12,.45);z-index:100;opacity:0;pointer-events:none;transition:opacity .22s;}
+.sheet-mask.show{opacity:1;pointer-events:all;}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:101;background:var(--surface);border-radius:18px 18px 0 0;transform:translateY(100%);transition:transform .28s cubic-bezier(.32,1,.56,1);max-height:82vh;display:flex;flex-direction:column;}
+.sheet.show{transform:translateY(0);}
+.sheet-handle{width:34px;height:4px;border-radius:99px;background:var(--border2);margin:10px auto 0;}
+.sheet-hd{padding:13px 16px 9px;border-bottom:1px solid var(--border);}
+.sheet-title{font-family:'Noto Serif SC',serif;font-size:var(--f-xl);font-weight:400;margin-bottom:1px;}
+.sheet-sub{font-size:var(--f-sm);color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.04em;}
+.sheet-body{flex:1;overflow-y:auto;padding:14px 16px;}
+.sheet-body::-webkit-scrollbar{width:0;}
+.sheet-btns{display:flex;gap:8px;padding:11px 16px 8px;border-top:1px solid var(--border);}
+.s-btn{flex:1;padding:12px;border:none;border-radius:10px;font-size:var(--f-md);font-family:'Noto Sans SC',sans-serif;cursor:pointer;letter-spacing:.04em;transition:all .13s;}
+.s-btn.cancel{background:var(--surface2);color:var(--text2);}
+.s-btn.ok{background:var(--text);color:#fff;}
+.s-btn.ok:hover{background:#3a2a1a;}
+.s-btn.ok:disabled{opacity:.4;cursor:default;}
+.s-btn.danger{background:var(--red-l);color:var(--red);border:1px solid rgba(156,52,40,.2);}
+
+/* ── settings ── */
+.settings-item{display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:box-shadow .14s;}
+.settings-item:hover{box-shadow:0 2px 10px var(--shadow2);}
+.settings-item-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.settings-item-content{flex:1;min-width:0;}
+.settings-item-title{font-size:var(--f-md);color:var(--text);margin-bottom:2px;}
+.settings-item-desc{font-size:var(--f-xs);color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.03em;}
+
+/* ── location management ── */
+.location-item{display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
+.location-item-name{flex:1;font-size:var(--f-base);color:var(--text);}
+.location-item-count{font-size:var(--f-sm);color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.03em;}
+.location-item-delete{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:6px;transition:all .14s;flex-shrink:0;}
+.location-item-delete:hover{background:var(--red-l);color:var(--red);}
+.location-item-delete:disabled{opacity:.3;cursor:not-allowed;}
+
+/* ── location select ── */
+.location-select{flex:1;border:none;background:transparent;font-size:var(--f-base);color:var(--text);outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%239c8c7c' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right center;padding-right:20px;}
+.location-select option{background:var(--surface);color:var(--text);}
+.location-edit{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .14s;}
+.location-edit:hover{background:var(--surface2);}
+
+/* qty spinner */
+.qty-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.qty-label{font-size:var(--f-base);color:var(--text2);flex:1;}
+.qty-spin{display:flex;align-items:center;gap:8px;}
+.q-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;font-size:var(--f-lg);color:var(--text2);display:flex;align-items:center;justify-content:center;}
+.q-btn:disabled{opacity:.35;cursor:default;}
+.q-num{font-size:var(--f-lg);font-family:'DM Mono',monospace;min-width:22px;text-align:center;}
+
+/* pour preview */
+.pour-preview{background:var(--green-l);border-radius:10px;padding:12px 14px;margin-top:4px;}
+.pour-row{display:flex;justify-content:space-between;font-size:var(--f-base);margin-bottom:5px;}
+.pour-row:last-child{margin-bottom:0;}
+.pour-row .plus{color:var(--green);font-family:'DM Mono',monospace;}
+
+/* ════════════════════════════
+   ADD SCREEN
+════════════════════════════ */
+.add-wrap{padding:16px 14px 80px;}
+.add-method{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:11px;cursor:pointer;margin-bottom:9px;transition:box-shadow .14s;-webkit-tap-highlight-color:transparent;}
+.add-method:hover{box-shadow:0 2px 10px var(--shadow);}
+.add-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:var(--f-xl);flex-shrink:0;}
+.add-method h3{font-size:var(--f-md);font-weight:500;margin-bottom:2px;}
+.add-method p{font-size:var(--f-base);color:var(--text2);line-height:1.45;}
+.div-or{text-align:center;font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);margin:13px 0;position:relative;}
+.div-or::before,.div-or::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border);}
+.div-or::before{left:0;}.div-or::after{right:0;}
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden;margin-bottom:12px;}
+.form-hd{padding:9px 13px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);}
+.form-hd-t{font-size:var(--f-sm);font-family:'DM Mono',monospace;letter-spacing:.08em;color:var(--green);}
+.form-conf{margin-left:auto;font-size:var(--f-xs);font-family:'DM Mono',monospace;background:var(--green-l);color:var(--green);padding:2px 6px;border-radius:99px;}
+.frow{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;}
+.frow:last-child{border-bottom:none;}
+.flabel{width:64px;font-size:var(--f-sm);font-family:'DM Mono',monospace;letter-spacing:.04em;color:var(--muted);flex-shrink:0;}
+.finput{flex:1;border:none;background:transparent;font-size:var(--f-base);color:var(--text);outline:none;}
+.finput::placeholder{color:var(--muted);}
+.funit{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);}
+.frow.unc{background:rgba(138,94,20,.04);}
+.udot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;}
+
+/* auto-detect badge */
+.detected-badge{display:inline-flex;align-items:center;gap:5px;background:var(--green-l);border:1px solid var(--green-m);border-radius:7px;padding:4px 10px;font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--green);margin:0 13px 10px;letter-spacing:.04em;}
+
+.confirm-btn{width:100%;padding:13px;background:var(--text);color:#fff;border:none;border-radius:10px;font-size:var(--f-md);cursor:pointer;letter-spacing:.05em;}
+
+/* scan */
+.scan-ov{position:fixed;inset:0;z-index:200;background:#090909;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;opacity:0;pointer-events:none;transition:opacity .18s;}
+.scan-ov.show{opacity:1;pointer-events:all;}
+.scan-frame{width:228px;height:276px;border:1.5px solid rgba(255,255,255,.1);border-radius:14px;overflow:hidden;background:#131313;display:flex;align-items:center;justify-content:center;position:relative;}
+.scan-line{position:absolute;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,#4dc880,transparent);animation:sl 1.5s ease-in-out infinite;}
+@keyframes sl{0%{top:8%;}100%{top:86%;}}
+.scan-txt{font-family:'DM Mono',monospace;font-size:var(--f-sm);letter-spacing:.1em;color:rgba(255,255,255,.38);text-transform:uppercase;}
+.scan-cancel{padding:8px 22px;border:1px solid rgba(255,255,255,.14);border-radius:99px;background:transparent;color:rgba(255,255,255,.38);font-family:'DM Mono',monospace;font-size:var(--f-sm);cursor:pointer;}
+
+/* fab */
+.fab{position:fixed;bottom:calc(var(--tab-h) + 16px);right:18px;width:46px;height:46px;border-radius:50%;background:var(--text);color:#fff;border:none;font-size:20px;cursor:pointer;box-shadow:0 4px 16px var(--shadow2);display:flex;align-items:center;justify-content:center;z-index:50;transition:transform .14s;}
+.fab:active{transform:scale(.92);}
+
+/* grain */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");opacity:.5;}
+
+/* ════════════════════════════
+   DELETE — throw animation
+════════════════════════════ */
+
+/* 详情页底部删除入口 */
+.delete-zone{padding:28px 20px 16px;display:flex;justify-content:center;}
+.delete-trigger{font-size:var(--f-base);font-family:'DM Mono',monospace;letter-spacing:.06em;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 14px;border-radius:99px;transition:color .18s,background .18s;position:relative;}
+.delete-trigger::before{content:'';position:absolute;inset:0;border-radius:99px;border:1px solid transparent;transition:border-color .18s;}
+.delete-trigger:hover{color:var(--red);}
+.delete-trigger:hover::before{border-color:rgba(156,52,40,.25);}
+
+/* Sheet内的物品展示区 */
+.del-preview{display:flex;flex-direction:column;align-items:center;padding:10px 0 18px;gap:10px;overflow:hidden;}
+.del-illus-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+
+/* 晃动 keyframe — 按住时播放 */
+@keyframes wobble{
+  0%  {transform:rotate(0deg) translateY(0);}
+  15% {transform:rotate(-4deg) translateY(-2px);}
+  30% {transform:rotate(3deg)  translateY(-4px);}
+  45% {transform:rotate(-3deg) translateY(-2px);}
+  60% {transform:rotate(4deg)  translateY(-5px);}
+  75% {transform:rotate(-2deg) translateY(-3px);}
+  90% {transform:rotate(2deg)  translateY(-2px);}
+  100%{transform:rotate(0deg) translateY(0);}
+}
+
+/* 扔出 keyframe — 向下甩出屏幕 */
+@keyframes throwDown{
+  0%  {transform:rotate(0deg)   translateY(0)    scale(1);   opacity:1;}
+  20% {transform:rotate(-8deg)  translateY(8px)  scale(1.04);opacity:1;}
+  60% {transform:rotate(18deg)  translateY(120px) scale(.9); opacity:.6;}
+  100%{transform:rotate(28deg)  translateY(340px) scale(.7); opacity:0;}
+}
+
+.del-illus-wrap.wobbling svg,
+.del-illus-wrap.wobbling>*{
+  animation:wobble .55s ease-in-out infinite;
+  transform-origin:center bottom;
+}
+.del-illus-wrap.throwing svg,
+.del-illus-wrap.throwing>*{
+  animation:throwDown .42s cubic-bezier(.4,0,1,1) forwards;
+  transform-origin:center bottom;
+}
+
+.del-item-name{font-family:'Noto Serif SC',serif;font-size:var(--f-xl);font-weight:400;color:var(--text);letter-spacing:.04em;}
+.del-item-sub{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.05em;}
+.del-hint{font-size:var(--f-base);color:var(--text2);line-height:1.7;text-align:center;max-width:220px;}
+
+/* 确认按钮 — 按住触发晃动 */
+.del-confirm-btn{
+  width:100%;padding:13px;
+  background:var(--red-l);color:var(--red);
+  border:1.5px solid rgba(156,52,40,.22);
+  border-radius:10px;font-size:var(--f-md);
+  font-family:'Noto Sans SC',sans-serif;
+  cursor:pointer;letter-spacing:.05em;
+  transition:background .15s,transform .1s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;-webkit-user-select:none;
+}
+.del-confirm-btn:active,.del-confirm-btn.pressing{
+  background:rgba(156,52,40,.15);
+  transform:scale(.98);
+}
+
+/* ════════════════════════════
+   UNDO BAR (bottom)
+════════════════════════════ */
+.undo-bar{
+  position:fixed;bottom:calc(var(--tab-h) + 10px);left:14px;right:14px;
+  z-index:200;
+  background:var(--text);color:#fff;
+  border-radius:10px;
+  display:flex;align-items:center;
+  padding:11px 14px;gap:10px;
+  box-shadow:0 4px 20px rgba(0,0,0,.22);
+  transform:translateY(20px);opacity:0;
+  transition:transform .28s cubic-bezier(.32,1,.56,1),opacity .28s ease;
+  pointer-events:none;
+}
+.undo-bar.show{transform:translateY(0);opacity:1;pointer-events:all;}
+.undo-icon{font-size:var(--f-xl);flex-shrink:0;}
+.undo-text{flex:1;font-size:var(--f-base);line-height:1.4;}
+.undo-text b{font-weight:500;}
+.undo-text small{font-size:var(--f-sm);opacity:.58;font-family:'DM Mono',monospace;display:block;margin-top:1px;}
+.undo-btn{font-size:var(--f-base);font-family:'DM Mono',monospace;letter-spacing:.06em;color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;transition:background .14s;}
+.undo-btn:hover{background:rgba(255,255,255,.25);}
+.undo-progress{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 10px 10px;background:rgba(255,255,255,.3);transition:width linear;}
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+
+<!-- ══════════ HOME (tabs) ══════════ -->
+<div class="screen active" id="scr-home">
+  <div class="topbar">
+    <div>
+      <div style="font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.12em;color:var(--muted);margin-bottom:1px" id="today-str"></div>
+      <div class="tb-title">家用品 <span style="color:var(--green)">余量</span></div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="ib" id="home-add-btn" onclick="nav('scr-add')" title="录入" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="ib" onclick="openSettings()" title="设置">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 2.5V1M8 15V13.5M13.5 8H15M1 8H2.5M12.5 3.5L13.5 2.5M2.5 13.5L3.5 12.5M12.5 12.5L13.5 13.5M2.5 2.5L3.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="alert" id="alert-banner" style="display:none">
+    <div class="alert-dot"></div><span id="alert-text"></span>
+  </div>
+
+  <!-- tab content areas -->
+  <div class="scroll" id="tab-dashboard" style="display:block">
+    <div class="dash-scroll" id="dash-body"></div>
+  </div>
+  <div class="scroll" id="tab-gallery" style="display:none">
+    <div id="gallery-body" style="padding-bottom:70px"></div>
+  </div>
+
+  <!-- tab bar -->
+  <div class="tab-bar" id="tab-bar">
+    <div class="tab-item active" id="tab-btn-0" onclick="switchTab(0)">
+      <div class="tab-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/><rect x="11" y="2" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="11" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/><rect x="11" y="11" width="7" height="7" rx="2" stroke="currentColor" stroke-width="1.4"/></svg>
+      </div>
+      <div class="tab-label">仪表盘</div>
+    </div>
+    <div class="tab-item" id="tab-btn-1" onclick="switchTab(1)">
+      <div class="tab-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="3.5" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="8.5" width="16" height="3.5" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="14" width="16" height="3.5" rx="1.5" stroke="currentColor" stroke-width="1.4"/></svg>
+      </div>
+      <div class="tab-label">物品库</div>
+    </div>
+    <div class="tab-ink" id="tab-ink" style="left:0;width:50%"></div>
+  </div>
+
+  <button class="fab" id="home-fab" onclick="nav('scr-add')">＋</button>
+</div>
+
+<!-- ══════════ DETAIL ══════════ -->
+<div class="screen" id="scr-detail">
+  <div class="topbar">
+    <div class="tb-back" onclick="nav('scr-home')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2L5 6.5L8.5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>返回
+    </div>
+    <div class="tb-title" id="d-title">详情</div>
+    <div style="width:48px"></div>
+  </div>
+  <div class="scroll" id="d-scroll" style="padding-bottom:40px"></div>
+</div>
+
+<!-- ══════════ SETTINGS ══════════ -->
+<div class="screen" id="scr-settings">
+  <div class="topbar">
+    <div class="tb-back" onclick="nav('scr-home')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2L5 6.5L8.5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>返回
+    </div>
+    <div class="tb-title">设置</div>
+    <div style="width:48px"></div>
+  </div>
+  <div class="scroll">
+    <div style="padding:14px 16px">
+      <div class="settings-item" onclick="openLocationManagement()">
+        <div class="settings-item-icon">📍</div>
+        <div class="settings-item-content">
+          <div class="settings-item-title">地点管理</div>
+          <div class="settings-item-desc">管理库存存放地点</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="settings-item" onclick="openFontSizeSettings()">
+        <div class="settings-item-icon">🔤</div>
+        <div class="settings-item-content">
+          <div class="settings-item-title">字号管理</div>
+          <div class="settings-item-desc">调整界面字号大小</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ LOCATION MANAGEMENT ══════════ -->
+<div class="screen" id="scr-location-mgmt">
+  <div class="topbar">
+    <div class="tb-back" onclick="nav('scr-settings')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2L5 6.5L8.5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>返回
+    </div>
+    <div class="tb-title">地点管理</div>
+    <div style="width:48px"></div>
+  </div>
+  <div class="scroll">
+    <div style="padding:14px 16px">
+      <div id="location-list"></div>
+      <div id="location-empty" style="display:none;text-align:center;padding:40px 20px;color:var(--muted);font-size:var(--f-sm)">
+        <div style="font-size:32px;margin-bottom:8px;opacity:.5">📍</div>
+        <div style="margin-bottom:4px">还没有添加库存地点</div>
+        <div style="font-size:var(--f-xs);color:var(--muted);opacity:.8;line-height:1.6;margin-top:8px">点击下方「＋ 添加地点」按钮添加第一个地点<br>例如：卧室透明箱、厨房第二个抽屉</div>
+      </div>
+      <button class="confirm-btn" onclick="openAddLocationSheet()" style="margin-top:20px">＋ 添加地点</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ADD ══════════ -->
+<div class="screen" id="scr-add">
+  <div class="topbar">
+    <div class="tb-back" onclick="nav('scr-home')">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2L5 6.5L8.5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>返回
+    </div>
+    <div class="tb-title">录入物品</div>
+    <div style="width:48px"></div>
+  </div>
+  <div class="scroll"><div class="add-wrap">
+    <div class="add-method" onclick="doScan('photo')">
+      <div class="add-icon" style="background:#e8f5ee">📷</div>
+      <div><h3>拍照识别</h3><p>拍产品正面，自动识别品名、规格、保质期、分类</p></div>
+    </div>
+    <div class="add-method" onclick="doScan('order')">
+      <div class="add-icon" style="background:#fef8ea">🧾</div>
+      <div><h3>订单截图</h3><p>淘宝 / 京东截图，批量导入并自动分类</p></div>
+    </div>
+    <div class="div-or">或手动填写</div>
+    <div class="form-card" id="recog-result" style="display:none">
+      <div class="form-hd">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#2e6448" stroke-width="1.2"/><path d="M3.5 6L5.5 8L8.5 4.5" stroke="#2e6448" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <span class="form-hd-t">AI 识别结果</span><span class="form-conf">置信度 96%</span>
+      </div>
+      <div id="detected-cat-badge"></div>
+      <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™"></div>
+      <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
+      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit">ml</span></div>
+      <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
+      <div class="frow unc"><div class="udot"></div><span class="flabel" style="color:var(--amber)">保质期至</span><input class="finput" id="fi-exp" value="2026-09-01" type="date"></div>
+      <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="fi-location"><option value="">未填写</option></select></div>
+    </div>
+    <div class="form-card" id="manual-form">
+      <div class="frow"><span class="flabel">品名</span><input class="finput" id="mf-name" placeholder="如：洗发水、牙膏…" oninput="autoDetect(this.value)"></div>
+      <div id="mf-detect-badge"></div>
+      <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
+      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><span class="funit" id="mf-unit">ml</span></div>
+      <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="mf-qty" value="1" style="max-width:45px"><span class="funit">件/包</span></div>
+      <div class="frow"><span class="flabel">保质期至</span><input class="finput" type="date" id="mf-exp"></div>
+      <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="mf-location"><option value="">未填写</option></select></div>
+    </div>
+    <button class="confirm-btn" onclick="confirmAdd()">确认录入 →</button>
+  </div></div>
+</div>
+
+<!-- scan overlay -->
+<div class="scan-ov" id="scan-ov">
+  <div class="scan-txt" id="scan-lbl">识别中</div>
+  <div class="scan-frame"><div class="scan-line"></div><div style="font-size:38px;opacity:.1">📦</div></div>
+  <div class="scan-txt" id="scan-step">图像预处理…</div>
+  <button class="scan-cancel" onclick="cancelScan()">取消</button>
+</div>
+
+<!-- deduct toast -->
+<div class="deduct-toast" id="deduct-toast">
+  <div class="dt-title">✦ 已更新今日用量</div>
+  <div class="dt-body" id="dt-body"></div>
+  <div class="dt-close" onclick="this.parentElement.classList.remove('show')">×</div>
+</div>
+
+<!-- sheet -->
+<div class="sheet-mask" id="sheet-mask" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hd"><div class="sheet-title" id="sh-title">操作</div><div class="sheet-sub" id="sh-sub"></div></div>
+  <div class="sheet-body" id="sh-body"></div>
+  <div class="sheet-btns" id="sh-btns"></div>
+</div>
+
+<!-- undo bar -->
+<div class="undo-bar" id="undo-bar">
+  <div class="undo-icon">🗑</div>
+  <div class="undo-text"><b id="undo-name">物品</b>已删除<small id="undo-countdown"></small></div>
+  <button class="undo-btn" onclick="undoDelete()">撤销</button>
+  <div class="undo-progress" id="undo-progress" style="width:100%"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  SHAPE DEFINITIONS — 7 precise + 1 fallback
+// ═══════════════════════════════════════════════
+
+// Helper: liquid fill with clip
+function liquidFill(W,H,pct,color,sId,bodyPath,fillTop,fillBot){
+  const [cl,cm,cd]=color, isLow=pct<.2;
+  const lc1=isLow?'#eeaa98':cl, lc2=isLow?'#9c3428':cm;
+  const clipY=fillBot-(fillBot-fillTop)*pct;
+  return `<defs>
+    <clipPath id="lc${sId}"><rect id="cr${sId}" x="0" y="${clipY.toFixed(1)}" width="${W}" height="${H}"/></clipPath>
+    <linearGradient id="lg${sId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${lc1}"/><stop offset="100%" stop-color="${lc2}"/>
+    </linearGradient>
+    <linearGradient id="gg${sId}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${cd}" stop-opacity=".12"/>
+      <stop offset="38%" stop-color="white" stop-opacity=".13"/>
+      <stop offset="100%" stop-color="${cd}" stop-opacity=".16"/>
+    </linearGradient>
+  </defs>
+  <path d="${bodyPath}" fill="rgba(250,246,238,.72)" stroke="${cd}" stroke-width=".9" stroke-opacity=".2"/>
+  <path d="${bodyPath}" fill="url(#lg${sId})" clip-path="url(#lc${sId})" opacity=".8" id="lf${sId}"/>
+  <path id="wv${sId}" d="M0,${clipY.toFixed(1)} Q${(W*.25).toFixed(1)},${(clipY-2.5).toFixed(1)} ${(W*.5).toFixed(1)},${(clipY+1.5).toFixed(1)} Q${(W*.75).toFixed(1)},${(clipY+4).toFixed(1)} ${W},${clipY.toFixed(1)} L${W},${H} L0,${H} Z"
+    fill="${lc1}" opacity=".35" clip-path="url(#lc${sId})"/>
+  <path d="${bodyPath}" fill="url(#gg${sId})"/>
+  <ellipse cx="${(W*.31).toFixed(1)}" cy="${(H*.43).toFixed(1)}" rx="${(W*.048).toFixed(1)}" ry="${(H*.072).toFixed(1)}" fill="white" opacity=".16"/>`;
+}
+
+const SHAPES = {
+  // ── 1. 洗发水瓶（宽肩泵瓶，有泵头）
+  shampooBottle(W,H,pct,color,sId){
+    const [cl,cm,cd]=color;
+    // pump stem + head
+    const pumpStem=`M${W*.43},0 L${W*.43},${H*.04} L${W*.38},${H*.08} L${W*.62},${H*.08} L${W*.57},${H*.04} L${W*.57},0 Z`;
+    const pumpHead=`M${W*.28},${H*.055} Q${W*.28},${H*.03} ${W*.38},${H*.03} L${W*.62},${H*.03} Q${W*.72},${H*.03} ${W*.72},${H*.055} L${W*.72},${H*.085} Q${W*.72},${H*.11} ${W*.62},${H*.11} L${W*.38},${H*.11} Q${W*.28},${H*.11} ${W*.28},${H*.085} Z`;
+    // body: wide shoulders
+    const body=`M${W*.35},${H*.11} Q${W*.16},${H*.15} ${W*.14},${H*.25} L${W*.14},${H*.87} Q${W*.14},${H*.96} ${W*.5},${H*.97} Q${W*.86},${H*.96} ${W*.86},${H*.87} L${W*.86},${H*.25} Q${W*.84},${H*.15} ${W*.65},${H*.11} Z`;
+    const fill=liquidFill(W,H,pct,color,sId,body,H*.25,H*.93);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      ${fill}
+      <path d="${pumpStem}" fill="${cd}" opacity=".5"/>
+      <path d="${pumpHead}" fill="${cm}" stroke="${cd}" stroke-width=".7" stroke-opacity=".3"/>
+      <rect x="${W*.44}" y="${H*.005}" width="${W*.12}" height="${H*.03}" rx="2" fill="${cd}" opacity=".4"/>
+    </svg>`;
+  },
+
+  // ── 2. 洗面奶软管（横向尖嘴，管身竖放）
+  facewashTube(W,H,pct,color,sId){
+    const [cl,cm,cd]=color, isLow=pct<.2;
+    const lc1=isLow?'#eeaa98':cl, lc2=isLow?'#9c3428':cm;
+    // tube: nozzle at top, crimped flat bottom
+    const crimpY=H*.86+(1-pct)*H*.07; // as used, bottom crimps up
+    const tL=W*.21, tR=W*.79;
+    const body=`M${W*.38},0 Q${W*.38},${H*.1} ${tL},${H*.1} L${tL},${crimpY} Q${W*.36},${H*.96} ${W*.5},${H*.97} Q${W*.64},${H*.96} ${tR},${crimpY} L${tR},${H*.1} Q${W*.62},${H*.1} ${W*.62},0 Z`;
+    const clipY=crimpY-(crimpY-H*.1)*pct;
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="tc${sId}"><rect id="cr${sId}" x="0" y="${clipY.toFixed(1)}" width="${W}" height="${H}"/></clipPath>
+        <linearGradient id="tg${sId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${lc1}"/><stop offset="100%" stop-color="${lc2}"/>
+        </linearGradient>
+        <linearGradient id="tgg${sId}" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="${cd}" stop-opacity=".12"/><stop offset="40%" stop-color="white" stop-opacity=".12"/><stop offset="100%" stop-color="${cd}" stop-opacity=".16"/>
+        </linearGradient>
+      </defs>
+      <path d="${body}" fill="rgba(250,246,238,.72)" stroke="${cd}" stroke-width=".9" stroke-opacity=".2"/>
+      <path d="${body}" fill="url(#tg${sId})" clip-path="url(#tc${sId})" opacity=".8" id="lf${sId}"/>
+      <path d="${body}" fill="url(#tgg${sId})"/>
+      <ellipse cx="${W*.32}" cy="${H*.5}" rx="${W*.04}" ry="${H*.07}" fill="white" opacity=".15"/>
+      <!-- nozzle cap -->
+      <rect x="${W*.38}" y="0" width="${W*.24}" height="${H*.06}" rx="2" fill="${cm}" stroke="${cd}" stroke-width=".7" stroke-opacity=".3"/>
+      <rect x="${W*.44}" y="${H*.005}" width="${W*.12}" height="${H*.05}" rx="1.5" fill="${cd}" opacity=".25"/>
+      <!-- crimp fold lines -->
+      ${pct<.3?`<line x1="${tL+2}" y1="${H*.88}" x2="${tR-2}" y2="${H*.885}" stroke="${cd}" stroke-width="1.4" stroke-opacity=".28" stroke-linecap="round"/>
+      <line x1="${tL+5}" y1="${H*.875}" x2="${tR-5}" y2="${H*.878}" stroke="${cd}" stroke-width=".7" stroke-opacity=".18" stroke-linecap="round"/>`
+      :pct<.6?`<line x1="${tL+3}" y1="${H*.88}" x2="${tR-3}" y2="${H*.883}" stroke="${cd}" stroke-width=".8" stroke-opacity=".18" stroke-linecap="round"/>`
+      :''}
+    </svg>`;
+  },
+
+  // ── 3. 牙膏（横卧软管，从侧面看）
+  toothpaste(W,H,pct,color,sId){
+    const [cl,cm,cd]=color, isLow=pct<.2;
+    const lc1=isLow?'#eeaa98':cl, lc2=isLow?'#9c3428':cm;
+    // Toothpaste rendered as a horizontal tube standing upright
+    // Cap on top (thin cylinder), body gets flatter as emptied from bottom
+    const tubW=W*.68, tubX=(W-tubW)/2;
+    const capH=H*.13;
+    const bodyH=H*.78;
+    const bodyTop=capH+H*.02;
+    // As tube empties, lower portion looks "pinched"
+    const pinchFactor=1-pct; // 0=full, 1=empty
+    const bottomWide=tubW*(1-pinchFactor*.55);
+    const bL=(W-bottomWide)/2, bR=(W+bottomWide)/2;
+    const tL=tubX, tR=tubX+tubW;
+    const body=`M${tL},${bodyTop} L${tL},${bodyTop+bodyH*.7} Q${bL},${bodyTop+bodyH*.9} ${bL+bottomWide*.1},${bodyTop+bodyH} L${bR-bottomWide*.1},${bodyTop+bodyH} Q${bR},${bodyTop+bodyH*.9} ${tR},${bodyTop+bodyH*.7} L${tR},${bodyTop} Z`;
+    const clipY=bodyTop+bodyH-(bodyH)*pct;
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="tpc${sId}"><rect id="cr${sId}" x="0" y="${clipY.toFixed(1)}" width="${W}" height="${H}"/></clipPath>
+        <linearGradient id="tpg${sId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${lc1}"/><stop offset="100%" stop-color="${lc2}"/>
+        </linearGradient>
+        <linearGradient id="tpgg${sId}" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="${cd}" stop-opacity=".1"/><stop offset="40%" stop-color="white" stop-opacity=".14"/><stop offset="100%" stop-color="${cd}" stop-opacity=".14"/>
+        </linearGradient>
+      </defs>
+      <path d="${body}" fill="rgba(250,246,238,.72)" stroke="${cd}" stroke-width=".9" stroke-opacity=".2"/>
+      <path d="${body}" fill="url(#tpg${sId})" clip-path="url(#tpc${sId})" opacity=".8" id="lf${sId}"/>
+      <path d="${body}" fill="url(#tpgg${sId})"/>
+      <!-- cap -->
+      <rect x="${tL+tubW*.2}" y="0" width="${tubW*.6}" height="${capH}" rx="3" fill="${cm}" stroke="${cd}" stroke-width=".8" stroke-opacity=".3"/>
+      <rect x="${tL+tubW*.28}" y="${H*.01}" width="${tubW*.44}" height="${capH*.55}" rx="2" fill="white" opacity=".2"/>
+      <!-- stripes on tube body -->
+      <rect x="${tL+tubW*.08}" y="${bodyTop+bodyH*.3}" width="${tubW*.84}" height="${bodyH*.18}" rx="1.5" fill="white" opacity=".15"/>
+      <ellipse cx="${W*.32}" cy="${bodyTop+bodyH*.45}" rx="${W*.04}" ry="${H*.06}" fill="white" opacity=".13"/>
+    </svg>`;
+  },
+
+  // ── 4. 面霜罐
+  jar(W,H,pct,color,sId){
+    const [cl,cm,cd]=color;
+    const jx=W*.1, jw=W*.8, lidH=H*.22, bodyH=H*.62, jy=H*.1;
+    const fillH=(bodyH*.8)*pct, fillY=jy+lidH+(bodyH*.8-fillH);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="jg${sId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${cl}"/><stop offset="100%" stop-color="${cm}"/>
+      </linearGradient></defs>
+      <!-- body -->
+      <rect x="${jx}" y="${jy+lidH}" width="${jw}" height="${bodyH}" rx="4" fill="rgba(252,248,240,.8)" stroke="${cd}" stroke-width=".8" stroke-opacity=".18"/>
+      <!-- cream fill -->
+      ${fillH>1?`<rect x="${jx+2}" y="${fillY.toFixed(1)}" width="${jw-4}" height="${fillH.toFixed(1)}" rx="2" fill="url(#jg${sId})" opacity=".78" id="lf${sId}"/>`:''}
+      <rect x="${jx}" y="${jy+lidH}" width="${jw}" height="${bodyH}" rx="4" fill="none" stroke="${cd}" stroke-width=".8" stroke-opacity=".18"/>
+      <!-- lid -->
+      <rect x="${jx-2}" y="${jy}" width="${jw+4}" height="${lidH}" rx="5" fill="${cm}" stroke="${cd}" stroke-width=".8" stroke-opacity=".28"/>
+      <rect x="${jx+5}" y="${jy+3}" width="${jw*.4}" height="${lidH*.28}" rx="2.5" fill="white" opacity=".24"/>
+      <rect x="${jx+jw*.1}" y="${jy+lidH+bodyH*.38}" width="${jw*.8}" height="${bodyH*.18}" rx="2" fill="white" opacity=".15"/>
+    </svg>`;
+  },
+
+  // ── 5. 垃圾袋（叠放的袋卷）
+  trashBag(W,H,pct,color,sId){
+    const [cl,cm,cd]=color;
+    // Show as a rolled/folded stack of bags, with fewer layers as pct decreases
+    const stackH=H*.72*pct, stackY=H*.88-stackH;
+    const rollW=W*.72, rollX=(W-rollW)/2;
+    const layers=Math.max(1,Math.round(pct*8));
+    let layerSVG='';
+    for(let i=layers-1;i>=0;i--){
+      const ly=stackY+i*(stackH/Math.max(layers,1));
+      const opacity=0.6+i*0.04;
+      layerSVG+=`<rect x="${rollX+(i%2)*2}" y="${ly.toFixed(1)}" width="${rollW-(i%2)*4}" height="${Math.max(4,stackH/layers-.5).toFixed(1)}" rx="2" fill="${i===0?cm:cl}" stroke="${cd}" stroke-width=".5" stroke-opacity="${opacity*.3}" opacity="${Math.min(1,opacity)}"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="bg${sId}" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="${cd}" stop-opacity=".12"/>
+        <stop offset="100%" stop-color="white" stop-opacity=".1"/>
+      </linearGradient></defs>
+      <!-- box container -->
+      <rect x="${W*.1}" y="${H*.08}" width="${W*.8}" height="${H*.84}" rx="4" fill="${cl}" stroke="${cd}" stroke-width=".8" stroke-opacity=".25"/>
+      <!-- bag stack -->
+      ${layerSVG}
+      <!-- box top fold -->
+      <rect x="${W*.1}" y="${H*.08}" width="${W*.8}" height="${H*.14}" rx="4" fill="${cm}" stroke="${cd}" stroke-width=".8" stroke-opacity=".28"/>
+      <!-- serrated edge at top center -->
+      <path d="M${W*.3},${H*.22} ${Array.from({length:8},(_,i)=>`L${W*.3+i*W*.05},${H*.22+(i%2)*H*.02}`).join('')} L${W*.7},${H*.22}" fill="none" stroke="${cd}" stroke-width=".8" stroke-opacity=".3"/>
+      <rect x="${W*.1}" y="${H*.08}" width="${W*.8}" height="${H*.92}" rx="4" fill="url(#bg${sId})"/>
+    </svg>`;
+  },
+
+  // ── 6. 抽纸盒（精细版）
+  tissueBox(W,H,pct,color,sId){
+    const [cl,cm,cd]=color;
+    const bx=W*.07, by=H*.08, bw=W*.86, bh=H*.84, flapH=H*.14;
+    const stackH=bh*.68*pct, stackY=by+flapH+(bh-flapH)*0.9-stackH;
+    const ticks=Math.max(0,Math.floor(pct*12));
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="tbgg${sId}" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="${cd}" stop-opacity=".14"/><stop offset="100%" stop-color="white" stop-opacity=".07"/>
+      </linearGradient></defs>
+      <rect x="${bx}" y="${by+flapH}" width="${bw}" height="${bh-flapH}" rx="3" fill="${cl}" stroke="${cd}" stroke-width=".8" stroke-opacity=".22"/>
+      ${stackH>2?`
+        <rect x="${bx+bw*.1}" y="${stackY.toFixed(1)}" width="${bw*.8}" height="${stackH.toFixed(1)}" fill="white" opacity="${pct<.2?.4:.82}" rx="1.5"/>
+        ${Array.from({length:ticks},(_,i)=>{const ly=stackY+i*(stackH/Math.max(ticks,1));return `<line x1="${bx+bw*.1}" y1="${ly.toFixed(1)}" x2="${bx+bw*.9}" y2="${ly.toFixed(1)}" stroke="#e8e2d8" stroke-width=".65"/>`;}).join('')}`:''}
+      <rect x="${bx}" y="${by}" width="${bw}" height="${flapH+3}" rx="3" fill="${cm}" stroke="${cd}" stroke-width=".8" stroke-opacity=".25"/>
+      <ellipse cx="${W/2}" cy="${by+flapH*.56}" rx="${bw*.27}" ry="${flapH*.33}" fill="white" opacity=".86"/>
+      <ellipse cx="${W/2}" cy="${by+flapH*.56}" rx="${bw*.27}" ry="${flapH*.33}" fill="none" stroke="${cd}" stroke-width=".65" stroke-opacity=".22"/>
+      ${pct>.06?`<path d="M${W/2-bw*.09},${by+flapH*.12}Q${W/2},${by-H*.035}${W/2+bw*.09},${by+flapH*.13}" fill="white" stroke="#e0dbd2" stroke-width=".65"/>`:
+        `<text x="${W/2}" y="${by+flapH*.65}" text-anchor="middle" font-size="7" font-family="DM Mono" fill="${cd}" opacity=".45">空</text>`}
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="3" fill="url(#tbgg${sId})"/>
+      <rect x="${bx+bw*.12}" y="${by+bh*.44}" width="${bw*.76}" height="${bh*.16}" rx="2" fill="white" opacity=".15"/>
+    </svg>`;
+  },
+
+  // ── 7. 洗衣液桶（大桶，有提手）
+  laundryJug(W,H,pct,color,sId){
+    const [cl,cm,cd]=color;
+    // Wide jug with handle cutout on side
+    const jx=W*.1, jw=W*.8;
+    const capH=H*.1, bodyH=H*.78, jy=H*.08;
+    const body=`M${jx},${jy+capH} Q${jx},${jy+capH+H*.04} ${jx+jw*.06},${jy+capH+H*.04} L${jx+jw*.06},${jy+capH+bodyH*.82} Q${jx},${jy+capH+bodyH*.88} ${jx},${jy+capH+bodyH} Q${jx},${jy+capH+bodyH+H*.03} ${W*.5},${jy+capH+bodyH+H*.04} Q${jx+jw},${jy+capH+bodyH+H*.03} ${jx+jw},${jy+capH+bodyH} Q${jx+jw},${jy+capH+bodyH*.88} ${jx+jw-jw*.06},${jy+capH+bodyH*.82} L${jx+jw-jw*.06},${jy+capH+H*.04} Q${jx+jw},${jy+capH+H*.04} ${jx+jw},${jy+capH} Z`;
+    const fill=liquidFill(W,H,pct,color,sId,body,jy+capH+H*.04,jy+capH+bodyH*.96);
+    // handle: arch on right side
+    const hx=W*.76, hy=jy+capH+bodyH*.2, hh=bodyH*.35, hw=W*.16;
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      ${fill}
+      <!-- handle -->
+      <path d="M${hx},${hy} Q${hx+hw},${hy} ${hx+hw},${hy+hh*.5} Q${hx+hw},${hy+hh} ${hx},${hy+hh}" fill="none" stroke="${cd}" stroke-width="4" stroke-opacity=".18" stroke-linecap="round"/>
+      <path d="M${hx},${hy} Q${hx+hw},${hy} ${hx+hw},${hy+hh*.5} Q${hx+hw},${hy+hh} ${hx},${hy+hh}" fill="none" stroke="rgba(250,246,238,.9)" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- cap/spout -->
+      <rect x="${W*.32}" y="${jy}" width="${W*.36}" height="${capH}" rx="3" fill="${cm}" stroke="${cd}" stroke-width=".8" stroke-opacity=".28"/>
+      <rect x="${W*.38}" y="${jy+H*.01}" width="${W*.24}" height="${capH*.5}" rx="2" fill="white" opacity=".2"/>
+      <!-- label band -->
+      <rect x="${jx+jw*.08}" y="${jy+capH+bodyH*.32}" width="${jw*.68}" height="${bodyH*.26}" rx="3" fill="white" opacity=".16"/>
+    </svg>`;
+  },
+
+  // ── 8. 通用进度条（兜底）
+  generic(W,H,pct,color,sId){
+    const [cl,cm,cd]=color, isLow=pct<.2;
+    const lc=isLow?'#9c3428':cm;
+    const bx=W*.18, bw=W*.64, by=H*.1, bh=H*.8;
+    const fillH=bh*.88*pct, fillY=by+(bh*.88-fillH);
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gg${sId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${cl}"/><stop offset="100%" stop-color="${lc}"/>
+        </linearGradient>
+        <clipPath id="gc${sId}"><rect x="${bx}" y="${fillY.toFixed(1)}" width="${bw}" height="${fillH.toFixed(1)}" rx="6"/></clipPath>
+      </defs>
+      <!-- container outline -->
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="8" fill="rgba(248,244,236,.7)" stroke="${cd}" stroke-width="1" stroke-opacity=".2"/>
+      <!-- fill -->
+      <rect x="${bx}" y="${fillY.toFixed(1)}" width="${bw}" height="${fillH.toFixed(1)}" rx="6" fill="url(#gg${sId})" opacity=".8" id="lf${sId}"/>
+      <!-- gloss -->
+      <rect x="${bx+bw*.1}" y="${by+bh*.06}" width="${bw*.18}" height="${bh*.72}" rx="4" fill="white" opacity=".12"/>
+      <!-- tick marks on side -->
+      ${Array.from({length:5},(_,i)=>{const ty=by+bh*.1+i*(bh*.8/4);return `<line x1="${bx-4}" y1="${ty}" x2="${bx-1}" y2="${ty}" stroke="${cd}" stroke-width=".8" stroke-opacity=".25"/>`;}).join('')}
+    </svg>`;
+  },
+};
+
+function getSVG(item,W,H,interactive=false){
+  const sId=item.id+(interactive?'d':'')+(W<40?'s':'');
+  const fn=SHAPES[item.shape]||SHAPES.generic;
+  return `${fn(W,H,item.activePercent/100,item.color,sId)}`;
+}
+
+function updateSVGLevel(item,interactive=false){
+  const W=interactive?80:64, H=interactive?138:106;
+  const sId=item.id+(interactive?'d':'');
+  const pct=item.activePercent/100;
+  const shapeKey=item.shape||'generic';
+
+  if(['shampooBottle','laundryJug'].includes(shapeKey)){
+    const tops={shampooBottle:H*.25,laundryJug:H*.12};
+    const top=tops[shapeKey], bot=H*.93;
+    const clipY=bot-(bot-top)*pct;
+    const cr=document.getElementById('cr'+sId), wv=document.getElementById('wv'+sId);
+    if(cr){cr.setAttribute('y',clipY.toFixed(1));cr.setAttribute('height',H-clipY+4);}
+    if(wv) wv.setAttribute('d',`M0,${clipY.toFixed(1)} Q${(W*.25).toFixed(1)},${(clipY-2.5).toFixed(1)} ${(W*.5).toFixed(1)},${(clipY+1.5).toFixed(1)} Q${(W*.75).toFixed(1)},${(clipY+4).toFixed(1)} ${W},${clipY.toFixed(1)} L${W},${H} L0,${H} Z`);
+  } else {
+    // Full re-render for shape-based animations
+    const wrap=document.getElementById(`illus-${interactive?'d-':''}${item.id}`);
+    if(wrap) wrap.innerHTML=getSVG(item,W,H,interactive);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  AUTO-DETECT: keyword → {cat, shape, unit, dailyUse}
+// ═══════════════════════════════════════════════
+const DETECT_MAP=[
+  {kw:['洗发','发水','护发素','发膜','发油'],cat:'护发',shape:'shampooBottle',unit:'ml',daily:6,color:['#c0dce8','#3870a8','#144068']},
+  {kw:['洗面奶','洁面','卸妆','洁肤'],cat:'护肤',shape:'facewashTube',unit:'g',daily:2,color:['#d0e8d4','#509060','#205030']},
+  {kw:['牙膏','漱口'],cat:'口腔',shape:'toothpaste',unit:'g',daily:1.5,color:['#b8e0f4','#2e88c0','#0e4870']},
+  {kw:['面霜','乳霜','眼霜','精华霜','保湿霜'],cat:'护肤',shape:'jar',unit:'g',daily:0.8,color:['#d0dce8','#4e6880','#1e3850']},
+  {kw:['垃圾袋','垃圾桶袋','清洁袋'],cat:'清洁',shape:'trashBag',unit:'个',daily:0.5,color:['#d8e8d4','#508850','#1e5020']},
+  {kw:['抽纸','面纸','纸巾','手帕纸','湿巾'],cat:'纸品',shape:'tissueBox',unit:'抽',daily:5,color:['#ece4d4','#b08c60','#68482e']},
+  {kw:['洗衣液','洗衣粉','柔顺剂','衣物'],cat:'清洁',shape:'laundryJug',unit:'ml',daily:30,color:['#d4e0f0','#4860a0','#182860']},
+  {kw:['沐浴','沐浴露','沐浴乳','沐浴啫喱'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:8,color:['#d4c4ec','#7050a8','#3a1e68']},
+  {kw:['洗洁精','餐具','碗'],cat:'清洁',shape:'laundryJug',unit:'ml',daily:5,color:['#fce4a8','#c48c1e','#785008']},
+  {kw:['神仙水','精华液','精华','玻尿酸','安瓶'],cat:'护肤',shape:'generic',unit:'ml',daily:0.5,color:['#c4dcd4','#4a7c6e','#1e4c3e']},
+  {kw:['护手霜','护体乳','身体乳','润肤'],cat:'护肤',shape:'facewashTube',unit:'ml',daily:1,color:['#ecd8c0','#c07848','#783818']},
+  {kw:['卫生纸','手纸','厕纸'],cat:'纸品',shape:'tissueBox',unit:'卷',daily:0.5,color:['#ece4d4','#b08c60','#68482e']},
+  {kw:['洗手液','皂液'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:5,color:['#d8ecd8','#489048','#185818']},
+];
+
+function detectItem(name){
+  if(!name||name.length<2) return null;
+  for(const rule of DETECT_MAP){
+    if(rule.kw.some(k=>name.includes(k))){
+      return{cat:rule.cat,shape:rule.shape,unit:rule.unit,daily:rule.daily,color:rule.color};
+    }
+  }
+  return null;
+}
+
+let _lastDetected=null;
+window.autoDetect=function(val){
+  const d=detectItem(val);
+  _lastDetected=d;
+  const badge=document.getElementById('mf-detect-badge');
+  const unitEl=document.getElementById('mf-unit');
+  if(d&&badge){
+    badge.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${d.shape==='generic'?'通用':shapeName(d.shape)} · ${d.unit}/天 默认消耗 ${d.daily}</div>`;
+    if(unitEl) unitEl.textContent=d.unit;
+  } else if(badge){
+    badge.innerHTML='';
+  }
+};
+
+function shapeName(s){
+  const m={shampooBottle:'泵瓶',facewashTube:'软管',toothpaste:'牙膏管',jar:'罐装',trashBag:'袋装',tissueBox:'纸盒',laundryJug:'大桶',generic:'通用'};
+  return m[s]||s;
+}
+
+// ═══════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════
+const DEFAULT=[
+  {id:'1',name:'神仙水',brand:'SK-II',cat:'护肤',packageSize:250,unit:'ml',activePercent:68,openCount:1,stockCount:0,dailyUse:0.5,color:['#c4dcd4','#4a7c6e','#1e4c3e'],shape:'generic',expiryDate:'2026-08-15',openedDate:'2025-12-01',logs:[{type:'录入',desc:'购入×1',delta:250,date:'2025-12-01'},{type:'自动',desc:'每日扣减×60天',delta:-30,date:'2026-03-01'}]},
+  {id:'2',name:'沐浴露',brand:"L'Occitane",cat:'清洁',packageSize:300,unit:'ml',activePercent:44,openCount:1,stockCount:1,dailyUse:8,color:['#d0c0ec','#7048a8','#3a1e64'],shape:'shampooBottle',expiryDate:'2027-03-01',openedDate:'2026-01-15',supplement:{itemId:'2s',name:'沐浴露补充装',brand:"L'Occitane",size:500,unit:'ml',stockCount:1},logs:[{type:'录入',desc:'购入正装+补充装',delta:300,date:'2026-01-15'},{type:'自动',desc:'每日扣减',delta:-52,date:'2026-03-12'}]},
+  {id:'3',name:'洗发水',brand:'Kérastase',cat:'护发',packageSize:400,unit:'ml',activePercent:16,openCount:1,stockCount:0,dailyUse:6,color:['#b8d2e8','#3868a0','#142e60'],shape:'shampooBottle',expiryDate:'2026-06-20',openedDate:'2025-11-01',logs:[{type:'录入',desc:'购入×1',delta:400,date:'2025-11-01'},{type:'自动',desc:'每日扣减',delta:-78,date:'2026-03-12'}]},
+  {id:'4',name:'抽纸',brand:'清风',cat:'纸品',packageSize:80,unit:'抽',activePercent:60,openCount:3,stockCount:5,dailyUse:5,color:['#e8dece','#b08c60','#684e2e'],shape:'tissueBox',expiryDate:null,openedDate:'2026-03-01',logs:[{type:'录入',desc:'购入×10包',delta:800,date:'2026-02-28'},{type:'自动',desc:'每日扣减×12天（单包）',delta:-60,date:'2026-03-12'}]},
+  {id:'5',name:'洗洁精',brand:'白猫',cat:'清洁',packageSize:600,unit:'ml',activePercent:10,openCount:1,stockCount:0,dailyUse:5,color:['#fcdea4','#c48c1e','#784800'],shape:'laundryJug',expiryDate:'2026-04-10',openedDate:'2025-10-01',logs:[{type:'录入',desc:'购入×1',delta:600,date:'2025-10-01'},{type:'自动',desc:'每日扣减',delta:-66,date:'2026-03-12'}]},
+  {id:'6',name:'牙膏',brand:'Sensodyne',cat:'口腔',packageSize:100,unit:'g',activePercent:38,openCount:1,stockCount:2,dailyUse:1.5,color:['#c0e2f4','#3484c0','#105480'],shape:'toothpaste',expiryDate:'2027-01-01',openedDate:'2026-01-01',logs:[{type:'录入',desc:'购入×3支',delta:300,date:'2026-01-01'},{type:'自动',desc:'每日扣减×70天',delta:-62,date:'2026-03-12'}]},
+  {id:'7',name:'洗面奶',brand:'Cetaphil',cat:'护肤',packageSize:120,unit:'g',activePercent:74,openCount:1,stockCount:1,dailyUse:2,color:['#d8e8cc','#628050','#2c4020'],shape:'facewashTube',expiryDate:'2027-06-01',openedDate:'2026-02-01',logs:[{type:'录入',desc:'购入×2支',delta:240,date:'2026-02-01'},{type:'自动',desc:'每日扣减',delta:-38,date:'2026-03-12'}]},
+  {id:'8',name:'洗发水',brand:'海飞丝',cat:'护发',packageSize:750,unit:'ml',activePercent:82,openCount:1,stockCount:2,dailyUse:6,color:['#c8e0d4','#489870','#185838'],shape:'shampooBottle',expiryDate:'2028-01-01',openedDate:'2026-02-10',logs:[{type:'录入',desc:'购入×3瓶',delta:2250,date:'2026-02-10'}]},
+  {id:'9',name:'面霜',brand:'La Mer',cat:'护肤',packageSize:60,unit:'g',activePercent:62,openCount:1,stockCount:0,dailyUse:0.8,color:['#d0dce8','#506880','#1e3850'],shape:'jar',expiryDate:'2027-02-01',openedDate:'2026-01-15',logs:[{type:'录入',desc:'购入×1',delta:60,date:'2026-01-15'}]},
+  {id:'10',name:'垃圾袋',brand:'优家',cat:'清洁',packageSize:100,unit:'个',activePercent:55,openCount:1,stockCount:3,dailyUse:0.5,color:['#d8e8d4','#508850','#1e5020'],shape:'trashBag',expiryDate:null,openedDate:'2026-01-01',logs:[{type:'录入',desc:'购入×4包',delta:400,date:'2026-01-01'}]},
+  {id:'11',name:'洗衣液',brand:'碧浪',cat:'清洁',packageSize:3000,unit:'ml',activePercent:70,openCount:1,stockCount:1,dailyUse:30,color:['#d4e0f0','#4860a0','#182860'],shape:'laundryJug',expiryDate:'2028-06-01',openedDate:'2026-01-20',logs:[{type:'录入',desc:'购入×2桶',delta:6000,date:'2026-01-20'}]},
+];
+
+let items=loadItems();
+function loadItems(){try{const s=localStorage.getItem('pantry_v4');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT));}catch{return JSON.parse(JSON.stringify(DEFAULT));}}
+function save(){try{localStorage.setItem('pantry_v4',JSON.stringify(items));}catch{}}
+
+// ═══════════════════════════════════════════════
+//  LOCATION MANAGEMENT
+// ═══════════════════════════════════════════════
+function loadLocations(){
+  try{
+    const s=localStorage.getItem('pantry_locations');
+    return s?JSON.parse(s):[];
+  }catch(e){
+    console.error('加载库存地点失败',e);
+    return [];
+  }
+}
+function saveLocations(locations){
+  try{
+    localStorage.setItem('pantry_locations',JSON.stringify(locations));
+  }catch(e){
+    if(e.name==='QuotaExceededError'){
+      showError('存储空间不足，请清理浏览器缓存');
+    }else{
+      console.error('保存库存地点失败',e);
+      showError('保存失败，请重试');
+    }
+  }
+}
+function getLocationUsageCount(locationName){
+  return items.filter(item=>item.location===locationName).length;
+}
+
+window.openSettings=function(){
+  nav('scr-settings');
+};
+
+window.openLocationManagement=function(){
+  nav('scr-location-mgmt');
+  renderLocationList();
+};
+
+function renderLocationList(){
+  const locations=loadLocations();
+  const listEl=document.getElementById('location-list');
+  const emptyEl=document.getElementById('location-empty');
+  
+  if(locations.length===0){
+    listEl.innerHTML='';
+    emptyEl.style.display='block';
+    return;
+  }
+  
+  emptyEl.style.display='none';
+  listEl.innerHTML=locations.map(loc=>{
+    const usageCount=getLocationUsageCount(loc);
+    const canDelete=usageCount===0;
+    return `
+      <div class="location-item">
+        <div class="location-item-name">${loc}</div>
+        <div class="location-item-count">${usageCount} 件物品</div>
+        <button class="location-item-delete" onclick="deleteLocation('${loc}')" ${!canDelete?'disabled':''} title="${canDelete?'删除':'该地点还有物品存放，无法删除'}">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+window.openAddLocationSheet=function(){
+  openSheet('添加库存地点','','<div class="frow"><span class="flabel">地点名称</span><input class="finput" id="new-location-name" placeholder="如：卧室透明箱、厨房第二个抽屉"></div>','添加',()=>{
+    const name=document.getElementById('new-location-name').value.trim();
+    if(!name){
+      showError('请输入地点名称');
+      return;
+    }
+    const locations=loadLocations();
+    if(locations.includes(name)){
+      showError('该地点已存在');
+      return;
+    }
+    locations.push(name);
+    saveLocations(locations);
+    closeSheet();
+    renderLocationList();
+    initLocationSelects();
+  });
+};
+
+window.deleteLocation=function(locationName){
+  const usageCount=getLocationUsageCount(locationName);
+  if(usageCount>0){
+    showError(`该库存地点还有 ${usageCount} 件物品存放，无法删除`);
+    return;
+  }
+  openSheet('删除库存地点',`确定要删除「${locationName}」吗？`,'删除后无法恢复，但不会影响已存在的物品记录。','删除',()=>{
+    const locations=loadLocations();
+    const index=locations.indexOf(locationName);
+    if(index>=0){
+      locations.splice(index,1);
+      saveLocations(locations);
+      closeSheet();
+      renderLocationList();
+      initLocationSelects();
+    }
+  },true);
+};
+
+// 字号管理
+function loadFontSize(){
+  const saved=localStorage.getItem('pantry_font_size');
+  return saved||'large'; // 默认大字号
+}
+
+function saveFontSize(size){
+  localStorage.setItem('pantry_font_size',size);
+  applyFontSize(size);
+}
+
+function applyFontSize(size){
+  const root=document.documentElement;
+  const scale=size==='small'?1.0:1.18; // 小字号1.0，大字号1.18
+  root.style.setProperty('--s',String(scale));
+}
+
+window.openFontSizeSettings=function(){
+  const currentSize=loadFontSize();
+  const body=`<div style="padding:8px 0">
+    <div class="settings-item" onclick="selectFontSize('small')" style="cursor:pointer;margin-bottom:8px;${currentSize==='small'?'border-color:var(--green);background:var(--green-l);':''}">
+      <div class="settings-item-icon">小</div>
+      <div class="settings-item-content">
+        <div class="settings-item-title">小字号</div>
+        <div class="settings-item-desc">适合需要显示更多内容的场景</div>
+      </div>
+      ${currentSize==='small'?'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" fill="var(--green)"/><path d="M5 8L7 10L11 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
+    </div>
+    <div class="settings-item" onclick="selectFontSize('large')" style="cursor:pointer;${currentSize==='large'?'border-color:var(--green);background:var(--green-l);':''}">
+      <div class="settings-item-icon">大</div>
+      <div class="settings-item-content">
+        <div class="settings-item-title">大字号</div>
+        <div class="settings-item-desc">默认字号，阅读更舒适</div>
+      </div>
+      ${currentSize==='large'?'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" fill="var(--green)"/><path d="M5 8L7 10L11 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
+    </div>
+  </div>`;
+  openSheet('字号管理','选择你喜欢的字号大小',body);
+};
+
+window.selectFontSize=function(size){
+  saveFontSize(size);
+  closeSheet();
+};
+
+function initLocationSelects(){
+  const locations=loadLocations();
+  const selects=document.querySelectorAll('.location-select');
+  selects.forEach(select=>{
+    const currentValue=select.value;
+    select.innerHTML='<option value="">未填写</option>'+locations.map(loc=>`<option value="${loc}">${loc}</option>`).join('');
+    if(currentValue)select.value=currentValue;
+  });
+}
+
+window.openLocationSelectSheet=function(itemId){
+  const item=items.find(i=>i.id===itemId);
+  if(!item)return;
+  const locations=loadLocations();
+  const currentLocation=item.location||'';
+  
+  let body='<div class="frow"><span class="flabel">选择地点</span><select class="location-select" id="sheet-location-select" style="flex:1;border:none;background:transparent;font-size:var(--f-base);color:var(--text);outline:none;cursor:pointer;">';
+  body+='<option value="">未填写</option>';
+  locations.forEach(loc=>{
+    body+=`<option value="${loc}" ${loc===currentLocation?'selected':''}>${loc}</option>`;
+  });
+  body+='</select></div>';
+  
+  if(locations.length===0){
+    body+='<div style="font-size:var(--f-sm);color:var(--muted);text-align:center;padding:12px;background:var(--surface2);border-radius:8px;margin-top:8px">还没有添加库存地点，请先在设置中管理地点</div>';
+  }
+  
+  openSheet('选择库存地点','',body,'确认',()=>{
+    const selectedLocation=document.getElementById('sheet-location-select').value||null;
+    item.location=selectedLocation;
+    save();
+    closeSheet();
+    const locationEl=document.getElementById(`d-location-${itemId}`);
+    if(locationEl)locationEl.textContent=selectedLocation||'未填写';
+  });
+};
+
+// ═══════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════
+// 获取使用区总余量（所有openItems的总和）
+const getRemain=item=>{
+  if(item.openItems&&Array.isArray(item.openItems)&&item.openItems.length>0){
+    const total=item.openItems.reduce((sum,pct)=>sum+item.packageSize*pct/100,0);
+    return +total.toFixed(1);
+  }
+  return +(item.packageSize*(item.activePercent||0)/100).toFixed(1);
+};
+// 获取总余量（使用区+库存货架+补充装）
+const getTotal=item=>+(getRemain(item)+item.stockCount*item.packageSize+((item.supplement?.stockCount||0)*(item.supplement?.size||0))).toFixed(0);
+// 获取平均百分比（用于向后兼容）
+const getActivePercent=item=>{
+  if(item.openItems&&Array.isArray(item.openItems)&&item.openItems.length>0){
+    const sum=item.openItems.reduce((s,p)=>s+p,0);
+    return Math.round(sum/item.openItems.length);
+  }
+  return item.activePercent||0;
+};
+function getDays(item){if(!item.dailyUse)return null;return Math.round(getTotal(item)/item.dailyUse);}
+function getStatus(item){
+  // 计算总余量（含库存）占单件规格的百分比
+  const totalRemain=getTotal(item); // 总余量 = 使用区总余量 + 库存货架 + 补充装
+  const totalPercent=(totalRemain/item.packageSize)*100; // 总余量占单件规格的百分比
+  const isLow=totalPercent<20; // 如果低于20%，需要补货
+  let exp='ok';
+  if(item.expiryDate){const d=(new Date(item.expiryDate)-new Date())/86400000;if(d<30)exp='urgent';else if(d<90)exp='soon';}
+  return{isLow,exp};
+}
+function getExpInfo(item){
+  if(!item.expiryDate)return null;
+  const d=Math.round((new Date(item.expiryDate)-new Date())/86400000);
+  if(d<0)return{days:d,cls:'urgent'}; // 负数表示已过期
+  if(d<30)return{days:d,cls:'urgent'};
+  if(d<90)return{days:d,cls:'soon'};
+  return{days:d,cls:'ok'};
+}
+function capStr(item){return `${getRemain(item)}/${item.packageSize}${item.unit}`;}
+function statusColor(item){const{isLow,exp}=getStatus(item);return isLow||exp==='urgent'?'var(--red)':exp==='soon'?'var(--amber)':'var(--green)';}
+function today(){return new Date().toISOString().slice(0,10);}
+function addLog(item,type,desc,delta){item.logs.push({type,desc,delta,date:today()});}
+
+// ═══════════════════════════════════════════════
+//  ALERT BANNER
+// ═══════════════════════════════════════════════
+function showError(msg){
+  const alert=document.getElementById('alert-banner');
+  if(alert){
+    alert.className='alert red';
+    alert.style.display='flex';
+    const textEl=document.getElementById('alert-text');
+    if(textEl)textEl.textContent=msg;
+    setTimeout(()=>alert.style.display='none',5000);
+  }
+}
+
+function updateAlert(){
+  const lows=items.filter(i=>getStatus(i).isLow);
+  const exps=items.filter(i=>getStatus(i).exp==='urgent');
+  const el=document.getElementById('alert-banner'),tx=document.getElementById('alert-text');
+  if(lows.length){el.className='alert red';el.style.display='flex';tx.textContent=lows.map(i=>i.name).join('、')+' 需要补货';}
+  else if(exps.length){el.className='alert amber';el.style.display='flex';tx.textContent=exps.map(i=>i.name).join('、')+' 即将到期';}
+  else el.style.display='none';
+}
+
+// ═══════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════
+let activeTab=0;
+function switchTab(idx){
+  activeTab=idx;
+  ['tab-dashboard','tab-gallery'].forEach((id,i)=>{
+    document.getElementById(id).style.display=i===idx?'block':'none';
+  });
+  [0,1].forEach(i=>{
+    document.getElementById('tab-btn-'+i).className='tab-item'+(i===idx?' active':'');
+  });
+  // ink bar
+  const ink=document.getElementById('tab-ink');
+  ink.style.left=(idx*50)+'%'; ink.style.width='50%';
+  // fab only on gallery tab
+  const fab=document.getElementById('home-fab');
+  const topBtn=document.getElementById('home-add-btn');
+  if(fab){
+    fab.style.display=idx===1?'flex':'none';
+  }
+  if(topBtn){
+    topBtn.style.display='none';
+  }
+  if(idx===0) renderDashboard();
+  else renderGallery();
+}
+
+// ═══════════════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDashboard(){
+  const lows=items.filter(i=>getStatus(i).isLow);
+  const exps=items.filter(i=>getStatus(i).exp==='urgent');
+  const soon=items.filter(i=>getStatus(i).exp==='soon');
+  const urgentItems=[...lows,...exps.filter(i=>!lows.includes(i))];
+
+  let h=`
+  <div class="dash-summary">
+    <div class="dash-sum-card">
+      <div class="dash-sum-val" style="font-size:var(--f-3xl)!important;">${items.length}</div>
+      <div class="dash-sum-label">总计物品</div>
+    </div>
+    <div class="dash-sum-card">
+      <div class="dash-sum-val${lows.length?'.red':'.green'}" style="font-size:var(--f-3xl)!important;color:${lows.length?'var(--red)':'var(--green)'}!important;">${lows.length}</div>
+      <div class="dash-sum-label">需要补货</div>
+    </div>
+    <div class="dash-sum-card">
+      <div class="dash-sum-val${exps.length+soon.length>0?'.amber':''}" style="font-size:var(--f-3xl)!important;color:${exps.length+soon.length>0?'var(--amber)':'var(--muted)'}!important;">${exps.length+soon.length}</div>
+      <div class="dash-sum-label">保质期预警</div>
+    </div>
+  </div>`;
+
+  if(urgentItems.length){
+    h+=`<div class="dash-sec-title">⚑ 需要处理</div>`;
+    urgentItems.forEach(item=>{
+      const{isLow,exp}=getStatus(item);
+      const tag=isLow?'<span class="alert-item-tag red">补货</span>':'<span class="alert-item-tag amber">到期</span>';
+      const reason=isLow?`余量 ${capStr(item)}，库存 0`:`保质期 ${item.expiryDate}`;
+      h+=`<div class="alert-item" onclick="openDetail('${item.id}')">
+        <div class="alert-item-icon">${getSVG(item,36,48)}</div>
+        <div class="alert-item-info">
+          <div class="alert-item-name">${item.name} <span style="font-size:var(--f-sm);color:var(--muted)">${item.brand}</span></div>
+          <div class="alert-item-reason">${reason}</div>
+        </div>
+        ${tag}
+      </div>`;
+    });
+  }
+
+  // All items list
+  h+=`<div class="dash-sec-title" style="margin-top:8px">所有物品</div>
+  <div class="dash-list">`;
+  items.forEach(item=>{
+    const{isLow,exp}=getStatus(item);
+    const pct=getActivePercent(item);
+    const clr=isLow?'var(--red)':pct<30?'var(--amber)':'var(--green)';
+    const dotC=isLow?'r':exp!=='ok'?'a':'g';
+    const days=getDays(item);
+    h+=`<div class="dl-row" onclick="openDetail('${item.id}')">
+      <div class="dl-icon">${getSVG({...item,activePercent:pct},28,36)}</div>
+      <div class="dl-info">
+        <div class="dl-name">${item.name}</div>
+        <div class="dl-cap">${capStr(item)} ${item.stockCount>0?`· +${item.stockCount}库`:''} ${days?`· ~${days}天`:''}</div>
+      </div>
+      <div class="dl-bar-wrap">
+        <div class="dl-bar"><div class="dl-bar-fill" style="width:${pct}%;background:${clr}"></div></div>
+        <div class="dl-pct">${pct}%</div>
+      </div>
+      <div class="dl-dot ${dotC}"></div>
+    </div>`;
+  });
+  h+='</div>';
+
+  document.getElementById('dash-body').innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════
+//  GALLERY
+// ═══════════════════════════════════════════════
+function renderGallery(){
+  const cats={};
+  items.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
+  let h='';
+  for(const[cat,list] of Object.entries(cats)){
+    h+=`<div class="cat-label">${cat}</div><div class="gallery-grid">`;
+    list.forEach(item=>{
+      const{isLow,exp}=getStatus(item);
+      let cls='gcard';if(isLow)cls+=' warn-low';else if(exp!=='ok')cls+=' warn-exp';
+      const badges=[
+        isLow?'<span class="bdg r">补货</span>':'',
+        exp==='urgent'?'<span class="bdg a">到期</span>':'',
+        exp==='soon'?`<span class="bdg a" style="background:var(--amber-l);color:var(--amber);border:1px solid rgba(138,94,20,.22)">临期</span>`:'',
+        item.openCount>1?`<span class="bdg g">×${item.openCount}开</span>`:'',
+      ].join('');
+      const sc=item.stockCount+(item.supplement?.stockCount||0);
+      const pip=sc>0?`<div class="stock-pip has">+${sc}</div>`:(isLow?`<div class="stock-pip none">缺</div>`:'');
+      const avgPct=getActivePercent(item);
+      const isEmpty=getRemain(item)===0;
+      h+=`<div class="${cls}" onclick="openDetail('${item.id}')">
+        ${badges?`<div class="gcard-badges">${badges}</div>`:''}
+        <div style="text-align:center">
+          <div class="gcard-name">${item.name}</div>
+          <div class="gcard-brand">${item.brand}</div>
+        </div>
+        <div class="illus-wrap" id="illus-${item.id}" data-id="${item.id}" style="width:64px;height:106px">
+          ${getSVG({...item,activePercent:avgPct},64,106)}${pip}
+        </div>
+        <div class="gcard-cap${isLow?' low':isEmpty?' empty':''}">${isEmpty?'已用完':capStr(item)}</div>
+      </div>`;
+    });
+    h+='</div>';
+  }
+  document.getElementById('gallery-body').innerHTML=h;
+  document.querySelectorAll('.illus-wrap[data-id]').forEach(el=>setupDrag(el,el.dataset.id,false));
+}
+
+// ═══════════════════════════════════════════════
+//  DRAG  (consistent across all shape types)
+//  Strategy: track movement distance; only block
+//  card's onclick if movement exceeds threshold.
+// ═══════════════════════════════════════════════
+const DRAG_THRESHOLD=6; // px — below this = tap, not drag
+
+function setupDrag(el,id,isDetail,openIndex=0){
+  const item=items.find(i=>i.id===id);if(!item)return;
+  // 确保openItems存在（只在初始化时，不要覆盖已有数据）
+  if(isDetail&&(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0)){
+    // 如果openItems不存在，从activePercent初始化，但保持openCount
+    const initPct=item.activePercent!==undefined?item.activePercent:100;
+    item.openItems=Array.from({length:item.openCount||1},()=>initPct);
+    item.openCount=item.openItems.length;
+  }
+  let down=false,dragging=false,sy=0,sv=0;
+  const gY=e=>e.touches?e.touches[0].clientY:e.clientY;
+
+  // ── pointer down ──
+  const onDown=e=>{
+    down=true;dragging=false;
+    sy=gY(e);
+    if(isDetail){
+      // 详情页：使用选中单件的百分比
+      const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
+      // 确保openItems数组存在且索引有效
+      if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
+        const initPct=item.activePercent!==undefined?item.activePercent:100;
+        item.openItems=Array.from({length:item.openCount||1},()=>initPct);
+        item.openCount=item.openItems.length;
+      }
+      // 确保索引在有效范围内
+      const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
+      sv=item.openItems[safeIdx]||0;
+    }else{
+      // 画廊页：使用平均百分比
+      sv=getActivePercent(item);
+    }
+    if(e.type==='mousedown') e.preventDefault();
+  };
+  el.addEventListener('mousedown',onDown);
+  el.addEventListener('touchstart',onDown,{passive:true});
+
+  // ── pointer move ──
+  const onMove=e=>{
+    if(!down)return;
+    const dy=sy-gY(e);
+    if(!dragging&&Math.abs(dy)<DRAG_THRESHOLD)return;
+    dragging=true;
+    const newPct=Math.round(Math.max(0,Math.min(100,sv+dy/82*100)));
+    
+    if(isDetail){
+      // 详情页：只更新选中单件的百分比，不影响其他件
+      const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
+      // 确保openItems数组存在
+      if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
+        const initPct=item.activePercent!==undefined?item.activePercent:100;
+        item.openItems=Array.from({length:item.openCount||1},()=>initPct);
+        item.openCount=item.openItems.length;
+      }
+      // 确保索引在有效范围内，只更新这一个索引的值
+      const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
+      item.openItems[safeIdx]=newPct;
+      // 更新SVG显示（只显示当前选中单件的百分比）
+      updateSVGLevel({...item,activePercent:newPct},isDetail);
+      refreshDetailPage(id);
+    }else{
+      // 画廊页：更新平均百分比（向后兼容）
+      item.activePercent=newPct;
+      updateSVGLevel(item,isDetail);
+      refreshGCard(item);
+      updateAlert();
+    }
+  };
+  document.addEventListener('mousemove',onMove);
+  el.addEventListener('touchmove',e=>{
+    if(!down)return;
+    const dy=sy-gY(e);
+    if(Math.abs(dy)>=DRAG_THRESHOLD){
+      e.stopPropagation();
+      onMove(e.touches[0]||e);
+    }
+  },{passive:false});
+
+  // ── pointer up ──
+  const onUp=e=>{
+    if(!down)return;
+    if(dragging){
+      el.addEventListener('click',stopClick,{once:true,capture:true});
+      save();
+    }
+    down=false;dragging=false;
+  };
+  const stopClick=e=>{e.stopPropagation();e.preventDefault();};
+  document.addEventListener('mouseup',onUp);
+  el.addEventListener('touchend',onUp,{passive:true});
+}
+
+function refreshGCard(item){
+  const card=document.getElementById('illus-'+item.id)?.closest('.gcard');
+  if(!card)return;
+  const re=card.querySelector('.gcard-cap');
+  if(re){
+    const{isLow}=getStatus(item);
+    const isEmpty=getRemain(item)===0;
+    re.textContent=isEmpty?'已用完':capStr(item);
+    re.className='gcard-cap'+(isLow?' low':isEmpty?' empty':'');
+  }
+}
+
+// 选中单件的索引（每个item独立）
+let selectedOpenIndex={};
+
+// ═══════════════════════════════════════════════
+//  DETAIL
+// ═══════════════════════════════════════════════
+function openDetail(id){
+  const item=items.find(i=>i.id===id);if(!item)return;
+  // 确保openItems数组存在（只在初始化时，不要覆盖已有数据）
+  if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
+    // 如果openItems不存在，从activePercent初始化，但保持openCount
+    const initPct=item.activePercent!==undefined?item.activePercent:100;
+    item.openItems=Array.from({length:item.openCount||1},()=>initPct);
+    item.openCount=item.openItems.length;
+  }
+  // 初始化选中索引
+  if(selectedOpenIndex[id]===undefined)selectedOpenIndex[id]=0;
+  const currentIndex=selectedOpenIndex[id];
+  const currentPct=item.openItems[currentIndex]||0;
+  
+  document.getElementById('d-title').textContent=item.name;
+  const{isLow,exp}=getStatus(item);
+  const expInfo=getExpInfo(item);
+  const days=getDays(item);
+  const isEmpty=getRemain(item)===0;
+
+  const obHTML=item.openItems.map((pct,i)=>{
+    const isEmptyItem=pct===0;
+    const isSelected=i===currentIndex;
+    return `<div class="ob-chip${isEmptyItem?' ob-chip-e':''}${isSelected?' ob-chip-selected':''}" onclick="selectOpenItem('${id}',${i})" style="cursor:pointer;${isSelected?'border:1.5px solid var(--green);background:var(--green-l);':''}"><div class="ob-dot${isEmptyItem?' e':''}"></div><span>${isEmptyItem?'空':pct+'%'}</span></div>`;
+  }).join('');
+
+  const shelfHTML=Array.from({length:item.stockCount},(_,i)=>`
+    <div class="shelf-item" onclick="openTake('${item.id}')">
+      <div class="shelf-bottle">${getSVG({...item,activePercent:100},42,58)}</div>
+      <div class="shelf-lbl">${item.packageSize}${item.unit}</div>
+      <div class="shelf-take">取出</div>
+    </div>`).join('')
+  +`<div class="shelf-add" onclick="openAddStock('${item.id}')">＋</div>`;
+
+  const suppHTML=item.supplement?`
+    <div class="supp-row" onclick="openPour('${item.id}')">
+      <div>${getSVG({...item,shape:'generic',activePercent:100},30,42)}</div>
+      <div style="flex:1">
+        <div class="supp-name">${item.supplement.name}</div>
+        <div class="supp-spec">${item.supplement.size}${item.supplement.unit} · 库存 ×${item.supplement.stockCount}</div>
+      </div>
+      <div class="supp-cta">${item.supplement.stockCount>0?'倒入 →':'缺货'}</div>
+    </div>`:'';
+
+  const html=`
+  <div class="d-hero">
+    <div class="d-illus" id="illus-d-${item.id}" data-id="${item.id}">
+      ${getSVG({...item,activePercent:currentPct},80,138,true)}
+      <div class="d-illus-hint">↕ 拖动</div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="d-name">${item.name}</div>
+      <div class="d-brand">${item.brand} · ${item.packageSize}${item.unit}</div>
+      <div class="d-val-row">
+        <span class="d-val-big${isLow?' low':currentPct===0?' empty':''}" id="d-v">${currentPct===0?'空':+(item.packageSize*currentPct/100).toFixed(1)}</span>
+        ${currentPct>0?`<span class="d-val-unit">/</span><span class="d-val-total">${item.packageSize}${item.unit}</span>`:''}
+      </div>
+      <div class="d-val-pct" id="d-pct">${currentPct}%</div>
+      <div class="usage-area">
+        <div class="usage-label">使用区（${item.openCount}件）</div>
+        <div class="ob-row">${obHTML}</div>
+        <div class="d-action-btns">
+          ${item.openCount>1?`<button class="d-act-btn danger" onclick="openRetire('${item.id}')">移除空件</button>`:''}
+          ${isEmpty&&item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">取出新件 →</button>`:''}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="d-sec">
+    <div class="d-sec-title">库存货架（${item.stockCount}件未开封）</div>
+    <div class="shelf">${shelfHTML}</div>
+    ${suppHTML}
+  </div>
+  <div class="d-sec">
+    <div class="d-sec-title">用量与预估</div>
+    <div class="d-row"><span class="d-row-label">每日消耗（单件）</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <input class="rate-inp" id="d-rate" type="number" step="0.5" min="0" value="${item.dailyUse}" onchange="setRate('${item.id}',this.value)">
+        <span style="font-size:var(--f-sm);color:var(--muted)">${item.unit}/天</span>
+      </div></div>
+    <div class="d-row"><span class="d-row-label">总余量（含库存）</span><span class="d-row-val" id="d-tot">${getTotal(item)} ${item.unit}</span></div>
+    <div class="d-row"><span class="d-row-label">预计用完</span><span class="d-row-val${days&&days<14?' red':days&&days<30?' amber':''}" id="d-days">${days?`约 ${days} 天后`:'—'}</span></div>
+  </div>
+  ${expInfo?`<div class="d-sec">
+    <div class="d-sec-title">保质期</div>
+    <div class="d-row"><span class="d-row-label">到期日期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${item.expiryDate}</span></div>
+    <div class="d-row"><span class="d-row-label">距离到期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${expInfo.days<0?`已过期${Math.abs(expInfo.days)}天`:expInfo.days===0?'今天到期':`${expInfo.days}天后`}</span></div>
+  </div>`:''}
+  <div class="d-sec">
+    <div class="d-sec-title">存放位置</div>
+    <div class="d-row">
+      <span class="d-row-label">库存地点</span>
+      <div class="location-edit" onclick="openLocationSelectSheet('${item.id}')">
+        <span class="d-row-val" id="d-location-${item.id}">${item.location||'未填写'}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="d-sec" style="padding-bottom:60px">
+    <div class="d-sec-title">操作记录</div>
+    ${item.logs.slice().reverse().map(l=>`<div class="log-row"><span class="log-type">${l.type}</span><span class="log-desc">${l.desc}</span><span class="log-delta ${l.delta>0?'pos':l.delta<0?'neg':''}">${l.delta>0?'+':''}${l.delta||''}</span><span class="log-date">${l.date}</span></div>`).join('')}
+  </div>
+  <div class="delete-zone">
+    <button class="delete-trigger" onclick="openDeleteSheet('${item.id}')">扔掉这件东西</button>
+  </div>`;
+
+  document.getElementById('d-scroll').innerHTML=html;
+  setupDrag(document.getElementById('illus-d-'+item.id),item.id,true,currentIndex);
+  nav('scr-detail');
+}
+
+// 选择使用区中的单件
+window.selectOpenItem=function(itemId,index){
+  const item=items.find(i=>i.id===itemId);
+  if(!item||!item.openItems||index>=item.openItems.length)return;
+  selectedOpenIndex[itemId]=index;
+  const currentPct=item.openItems[index]||0;
+  // 刷新详情页显示
+  refreshDetailPage(itemId);
+  // 更新主插画显示选中单件的百分比
+  const illusEl=document.getElementById('illus-d-'+itemId);
+  if(illusEl){
+    const svg=getSVG({...item,activePercent:currentPct},80,138,true);
+    illusEl.innerHTML=svg+'<div class="d-illus-hint">↕ 拖动</div>';
+    setupDrag(illusEl,itemId,true,index);
+  }
+};
+
+// 刷新详情页
+function refreshDetailPage(itemId){
+  const item=items.find(i=>i.id===itemId);
+  if(!item)return;
+  const currentIndex=selectedOpenIndex[itemId]||0;
+  const currentPct=item.openItems[currentIndex]||0;
+  const{isLow}=getStatus(item);
+  const isEmpty=getRemain(item)===0;
+  
+  // 更新使用区chip显示
+  const obRow=document.querySelector('.ob-row');
+  if(obRow){
+    const obHTML=item.openItems.map((pct,i)=>{
+      const isEmptyItem=pct===0;
+      const isSelected=i===currentIndex;
+      return `<div class="ob-chip${isEmptyItem?' ob-chip-e':''}${isSelected?' ob-chip-selected':''}" onclick="selectOpenItem('${itemId}',${i})" style="cursor:pointer;${isSelected?'border:1.5px solid var(--green);background:var(--green-l);':''}"><div class="ob-dot${isEmptyItem?' e':''}"></div><span>${isEmptyItem?'空':pct+'%'}</span></div>`;
+    }).join('');
+    obRow.innerHTML=obHTML;
+  }
+  
+  // 更新百分比显示
+  const pctEl=document.getElementById('d-pct');
+  if(pctEl)pctEl.textContent=currentPct+'%';
+  
+  // 更新总余量
+  refreshDStats(item);
+}
+
+function refreshDStats(item){
+  const currentIndex=selectedOpenIndex[item.id]||0;
+  const currentPct=item.openItems&&item.openItems[currentIndex]!==undefined?item.openItems[currentIndex]:getActivePercent(item);
+  // 状态区显示当前选中单件的余量（分子）和单件容量（分母）
+  const currentRemain=+(item.packageSize*currentPct/100).toFixed(1);
+  const isEmpty=currentPct===0;
+  const el=document.getElementById('d-v');
+  if(el){
+    el.textContent=isEmpty?'空':currentRemain;
+    el.className='d-val-big'+(getStatus(item).isLow?' low':isEmpty?' empty':'');
+  }
+  const p=document.getElementById('d-pct');if(p)p.textContent=currentPct+'%';
+  const t=document.getElementById('d-tot');if(t)t.textContent=getTotal(item)+' '+item.unit;
+  const d=document.getElementById('d-days');if(d){const dl=getDays(item);d.textContent=dl?`约 ${dl} 天后`:'—';}
+}
+function setRate(id,val){const item=items.find(i=>i.id===id);if(item){item.dailyUse=parseFloat(val)||0;refreshDStats(item);save();}}
+
+// ═══════════════════════════════════════════════
+//  SHEETS
+// ═══════════════════════════════════════════════
+let _sheetOK=null;
+function openSheet(title,sub,body,okLabel,onOk,isDanger=false){
+  document.getElementById('sh-title').textContent=title;
+  document.getElementById('sh-sub').textContent=sub||'';
+  document.getElementById('sh-body').innerHTML=body;
+  document.getElementById('sh-btns').innerHTML=`<button class="s-btn cancel" onclick="closeSheet()">取消</button><button class="s-btn ok${isDanger?' danger':''}" id="sh-ok">${okLabel}</button>`;
+  _sheetOK=onOk;
+  document.getElementById('sh-ok').onclick=()=>{if(_sheetOK)_sheetOK();};
+  document.getElementById('sheet-mask').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+}
+function closeSheet(){
+  document.getElementById('sheet-mask').classList.remove('show');
+  document.getElementById('sheet').classList.remove('show');
+  _sheetOK=null;
+}
+
+window.openTake=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item||item.stockCount===0){closeSheet();return;}
+  const body=`
+    <div class="qty-row"><span class="qty-label">取出数量</span>
+      <div class="qty-spin">
+        <button class="q-btn" id="tk-m" onclick="tkQty(-1,'${itemId}')" disabled>−</button>
+        <span class="q-num" id="tk-n">1</span>
+        <button class="q-btn" id="tk-p" onclick="tkQty(1,'${itemId}')" ${item.stockCount<=1?'disabled':''}>＋</button>
+        <span style="font-size:var(--f-base);color:var(--muted);margin-left:4px">/ 库存 ${item.stockCount} 件</span>
+      </div>
+    </div>
+    <div style="font-size:var(--f-base);color:var(--text2);line-height:1.8">
+      取出后加入「使用区」，当前已开 <b>${item.openCount}</b> 件。<br>
+      取后库存：<span id="tk-aft-s" style="font-family:'DM Mono',monospace">${item.stockCount-1} 件</span> ·
+      使用区：<span id="tk-aft-o" style="font-family:'DM Mono',monospace">${item.openCount+1} 件</span>
+    </div>`;
+  openSheet(`取出库存 · ${item.name}`,`库存 ${item.stockCount} 件`,body,'取出',()=>{
+    const n=parseInt(document.getElementById('tk-n').textContent);
+    item.stockCount-=n;
+    // 确保openItems数组存在
+    if(!item.openItems||!Array.isArray(item.openItems))item.openItems=[];
+    // 新件加入使用区，初始为100%
+    for(let i=0;i<n;i++)item.openItems.push(100);
+    item.openCount=item.openItems.length;
+    addLog(item,'开封',`从库存取出 ×${n}`,0);
+    save();closeSheet();openDetail(itemId);
+  });
+};
+
+window.tkQty=function(d,itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  const el=document.getElementById('tk-n');const cur=parseInt(el.textContent);
+  const nv=Math.max(1,Math.min(item.stockCount,cur+d));
+  el.textContent=nv;
+  document.getElementById('tk-aft-s').textContent=(item.stockCount-nv)+' 件';
+  document.getElementById('tk-aft-o').textContent=(item.openCount+nv)+' 件';
+  document.getElementById('tk-m').disabled=nv<=1;
+  document.getElementById('tk-p').disabled=nv>=item.stockCount;
+};
+
+window.openPour=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item||!item.supplement||item.supplement.stockCount<=0)return;
+  const supp=item.supplement;
+  const space=item.packageSize-item.packageSize*item.activePercent/100;
+  const amt=+Math.min(supp.size,space).toFixed(1);
+  const newPct=+Math.min(100,item.activePercent+amt/item.packageSize*100).toFixed(1);
+  const body=`
+    <div class="pour-preview">
+      <div class="pour-row"><span style="color:var(--text2)">当前余量</span><span>${getRemain(item)}/${item.packageSize}${item.unit}</span></div>
+      <div class="pour-row"><span style="color:var(--text2)">倒入量</span><span class="plus">+${amt}${item.unit}</span></div>
+      <div style="height:1px;background:var(--green-m);margin:6px 0"></div>
+      <div class="pour-row" style="font-weight:500"><span>倒后余量</span><span class="plus">${+(getRemain(item)+amt).toFixed(1)}/${item.packageSize}${item.unit} (${newPct}%)</span></div>
+    </div>
+    <div style="font-size:var(--f-sm);color:var(--muted);font-family:'DM Mono',monospace;margin-top:10px">补充装库存 ${supp.stockCount} → ${supp.stockCount-1}${amt<supp.size?`  ⚑ 容器已满，仅倒入${amt}${item.unit}`:''}</div>`;
+  openSheet(`倒入补充装 · ${item.name}`,`${supp.name} ×${supp.stockCount}`,body,'确认倒入',()=>{
+    item.activePercent=newPct;item.supplement.stockCount-=1;
+    addLog(item,'补充',`倒入补充装 +${amt}${item.unit}`,amt);
+    save();closeSheet();openDetail(itemId);
+  });
+};
+
+window.openRetire=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item||item.openCount<=1)return;
+  openSheet(`移除空件 · ${item.name}`,'',
+    `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">将一个已用完的件移出使用区。<br>开启数：${item.openCount} → ${item.openCount-1} 件</div>`,
+    '确认移除',()=>{
+      // 确保openItems数组存在
+      if(!item.openItems||!Array.isArray(item.openItems))item.openItems=[];
+      // 移除最后一个（或选中的）
+      const idx=selectedOpenIndex[itemId]!==undefined?selectedOpenIndex[itemId]:item.openItems.length-1;
+      item.openItems.splice(idx,1);
+      item.openCount=item.openItems.length;
+      if(selectedOpenIndex[itemId]>=item.openCount)selectedOpenIndex[itemId]=Math.max(0,item.openCount-1);
+      addLog(item,'移除','移除空件',0);
+      save();closeSheet();openDetail(itemId);
+    },true);
+};
+
+// ═══════════════════════════════════════════════
+//  DELETE — throw & undo
+// ═══════════════════════════════════════════════
+let _deletedItem=null, _deletedIndex=-1, _undoTmr=null, _undoProgressTmr=null;
+const UNDO_DURATION=4200; // ms
+
+window.openDeleteSheet=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+
+  // Build sheet content
+  const illusHTML=getSVG(item,72,106);
+  const body=`
+    <div class="del-preview">
+      <div class="del-illus-wrap" id="del-illus">${illusHTML}</div>
+      <div class="del-item-name">${item.name}</div>
+      <div class="del-item-sub">${item.brand} · ${item.packageSize}${item.unit}</div>
+      <div class="del-hint">这件东西会从 Pantry 里消失。<br>删除后 4 秒内可以撤销。</div>
+    </div>`;
+
+  // Use custom sheet layout (no generic openSheet, needs special button)
+  document.getElementById('sh-title').textContent='扔掉这件东西';
+  document.getElementById('sh-sub').textContent='';
+  document.getElementById('sh-body').innerHTML=body;
+  document.getElementById('sh-btns').innerHTML=`
+    <button class="s-btn cancel" onclick="closeSheet()">取消</button>
+    <button class="del-confirm-btn" id="del-btn"
+      onmousedown="startWobble()" ontouchstart="startWobble()"
+      onmouseup="doThrow('${itemId}')" ontouchend="doThrow('${itemId}')"
+      onmouseleave="stopWobble()">
+      扔掉它
+    </button>`;
+  document.getElementById('sheet-mask').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+};
+
+window.startWobble=function(){
+  const wrap=document.getElementById('del-illus');
+  if(wrap){wrap.classList.remove('throwing');wrap.classList.add('wobbling');}
+};
+window.stopWobble=function(){
+  const wrap=document.getElementById('del-illus');
+  if(wrap) wrap.classList.remove('wobbling');
+};
+window.doThrow=function(itemId){
+  const wrap=document.getElementById('del-illus');
+  if(!wrap)return;
+  wrap.classList.remove('wobbling');
+  wrap.classList.add('throwing');
+  // Wait for throw animation, then execute delete
+  setTimeout(()=>{
+    closeSheet();
+    executeDelete(itemId);
+  },400);
+};
+
+function executeDelete(itemId){
+  _deletedIndex=items.findIndex(i=>i.id===itemId);
+  if(_deletedIndex===-1)return;
+  _deletedItem=JSON.parse(JSON.stringify(items[_deletedIndex]));
+  items.splice(_deletedIndex,1);
+  save();
+  // go back to home
+  nav('scr-home');
+  if(activeTab===0)renderDashboard();else renderGallery();
+  updateAlert();
+  showUndoBar(_deletedItem.name);
+}
+
+function showUndoBar(name){
+  clearTimeout(_undoTmr);
+  clearInterval(_undoProgressTmr);
+  document.getElementById('undo-name').textContent=name;
+  const bar=document.getElementById('undo-bar');
+  const prog=document.getElementById('undo-progress');
+  const cd=document.getElementById('undo-countdown');
+  prog.style.transition='none';
+  prog.style.width='100%';
+  bar.classList.add('show');
+  // start progress shrink
+  let elapsed=0;
+  const tick=50;
+  _undoProgressTmr=setInterval(()=>{
+    elapsed+=tick;
+    const pct=Math.max(0,100-elapsed/UNDO_DURATION*100);
+    prog.style.transition=`width ${tick}ms linear`;
+    prog.style.width=pct+'%';
+    const secs=Math.ceil((UNDO_DURATION-elapsed)/1000);
+    cd.textContent=secs>0?`${secs}秒后永久删除`:'';
+    if(elapsed>=UNDO_DURATION){clearInterval(_undoProgressTmr);hideUndoBar();}
+  },tick);
+  _undoTmr=setTimeout(()=>{
+    _deletedItem=null;_deletedIndex=-1;
+    hideUndoBar();
+  },UNDO_DURATION);
+}
+
+function hideUndoBar(){
+  document.getElementById('undo-bar').classList.remove('show');
+  clearInterval(_undoProgressTmr);
+}
+
+window.undoDelete=function(){
+  if(!_deletedItem)return;
+  clearTimeout(_undoTmr);
+  clearInterval(_undoProgressTmr);
+  // re-insert at original position
+  if(_deletedIndex>=0&&_deletedIndex<=items.length) items.splice(_deletedIndex,0,_deletedItem);
+  else items.push(_deletedItem);
+  _deletedItem=null;_deletedIndex=-1;
+  save();
+  hideUndoBar();
+  if(activeTab===0)renderDashboard();else renderGallery();
+  updateAlert();
+};
+
+window.openAddStock=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  const body=`<div class="qty-row"><span class="qty-label">入库数量</span>
+    <div class="qty-spin">
+      <button class="q-btn" id="as-m" onclick="asQty(-1)" disabled>−</button>
+      <span class="q-num" id="as-n">1</span>
+      <button class="q-btn" id="as-p" onclick="asQty(1)">＋</button>
+      <span style="font-size:var(--f-base);color:var(--muted);margin-left:4px">件</span>
+    </div></div>
+    <div style="font-size:var(--f-base);color:var(--text2)">入库后：${item.stockCount} + <span id="as-add">1</span> = <span id="as-tot">${item.stockCount+1}</span> 件</div>`;
+  openSheet(`补入库存 · ${item.name}`,'',body,'确认入库',()=>{
+    const n=parseInt(document.getElementById('as-n').textContent);
+    item.stockCount+=n;addLog(item,'入库',`补入 ×${n}件`,item.packageSize*n);
+    save();closeSheet();openDetail(itemId);
+  });
+  window._asItemId=itemId;
+};
+window.asQty=function(d){
+  const el=document.getElementById('as-n');if(!el)return;
+  const nv=Math.max(1,parseInt(el.textContent)+d);el.textContent=nv;
+  const item=items.find(i=>i.id===window._asItemId)||items[0];
+  document.getElementById('as-add').textContent=nv;
+  document.getElementById('as-tot').textContent=item.stockCount+nv;
+  document.getElementById('as-m').disabled=nv<=1;
+};
+
+// ═══════════════════════════════════════════════
+//  ADD
+// ═══════════════════════════════════════════════
+let _scanTmr=null;
+
+// 图片预处理：压缩和格式转换
+async function preprocessImage(file){
+  return new Promise((resolve,reject)=>{
+    const fileName=file.name.toLowerCase();
+    const isHeic=fileName.endsWith('.heic')||fileName.endsWith('.heif')||file.type==='image/heic'||file.type==='image/heif';
+    console.log('预处理图片，文件名:',fileName,'类型:',file.type,'是否HEIC:',isHeic);
+    if(isHeic){
+      console.log('检测到HEIC格式，尝试读取...');
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const dataUrl=e.target.result;
+        if(!dataUrl.startsWith('data:image/')){
+          reject(new Error('HEIC格式暂不支持。请使用以下方法之一：\n1. 在iPhone"照片"应用中，选择图片→分享→存储到文件→选择JPEG格式\n2. 使用在线转换工具转换为JPEG\n3. 使用Mac的"预览"应用打开并导出为JPEG'));
+          return;
+        }
+        const img=new Image();
+        img.onload=()=>compressImage(img,resolve,reject);
+        img.onerror=()=>reject(new Error('HEIC格式暂不支持。请使用以下方法之一：\n1. 在iPhone"照片"应用中，选择图片→分享→存储到文件→选择JPEG格式\n2. 使用在线转换工具转换为JPEG\n3. 使用Mac的"预览"应用打开并导出为JPEG'));
+        img.src=dataUrl;
+      };
+      reader.onerror=()=>reject(new Error('无法读取HEIC文件。请先转换为JPEG格式。'));
+      reader.readAsDataURL(file);
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>compressImage(img,resolve,reject);
+      img.onerror=()=>reject(new Error('图片格式不支持或文件已损坏。请确保文件是有效的图片格式（JPEG、PNG等）'));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error('无法读取图片文件，请确保文件格式正确'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// 压缩图片
+function compressImage(img,resolve,reject){
+  const MAX_WIDTH=1280;const MAX_HEIGHT=1280;const QUALITY=0.7;const MAX_SIZE=300*1024;
+  let width=img.width,height=img.height;
+  if(width>MAX_WIDTH||height>MAX_HEIGHT){
+    const ratio=Math.min(MAX_WIDTH/width,MAX_HEIGHT/height);
+    width=Math.round(width*ratio);height=Math.round(height*ratio);
+  }
+  const canvas=document.createElement('canvas');
+  canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(img,0,0,width,height);
+  let quality=QUALITY;
+  function convertBlobToBase64(blob){
+    return new Promise((res,rej)=>{
+      const reader=new FileReader();
+      reader.onload=e=>res(e.target.result.split(',')[1]);
+      reader.onerror=rej;
+      reader.readAsDataURL(blob);
+    });
+  }
+  canvas.toBlob(async blob=>{
+    if(!blob){reject(new Error('图片处理失败'));return;}
+    if(blob.size>MAX_SIZE&&quality>0.4){
+      quality=Math.max(0.4,quality-0.15);
+      canvas.toBlob(async blob2=>{
+        if(!blob2){reject(new Error('图片压缩失败'));return;}
+        if(blob2.size>MAX_SIZE&&quality>0.4){
+          quality=Math.max(0.4,quality-0.15);
+          canvas.toBlob(async blob3=>{
+            if(!blob3){reject(new Error('图片压缩失败'));return;}
+            try{resolve(await convertBlobToBase64(blob3));}catch(e){reject(new Error('图片转换失败'));}
+          },'image/jpeg',quality);
+        }else{
+          try{resolve(await convertBlobToBase64(blob2));}catch(e){reject(new Error('图片转换失败'));}
+        }
+      },'image/jpeg',quality);
+    }else{
+      try{resolve(await convertBlobToBase64(blob));}catch(e){reject(new Error('图片转换失败'));}
+    }
+  },'image/jpeg',quality);
+}
+
+// 图片转 base64（带预处理）
+async function imageToBase64(file){
+  try{
+    return await preprocessImage(file);
+  }catch(err){
+    if(err.message&&err.message.includes('HEIC')){throw err;}
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=e=>resolve(e.target.result.split(',')[1]);
+      reader.onerror=()=>reject(new Error('无法读取图片文件，请确保文件格式正确（支持JPEG、PNG等）'));
+      reader.readAsDataURL(file);
+    });
+  }
+}
+
+// 规范化保质期日期格式
+function normalizeExpiryDate(dateStr){
+  if(!dateStr||dateStr==='null'||dateStr.toLowerCase()==='null')return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
+    const expiryDate=new Date(dateStr);
+    const today=new Date();today.setHours(0,0,0,0);
+    if(expiryDate<today){
+      const daysDiff=Math.round((today-expiryDate)/(1000*60*60*24));
+      console.warn('⚠️ 识别出的保质期是过去日期（已过期',daysDiff,'天），可能识别错误:',dateStr);
+    }
+    return dateStr;
+  }
+  const currentYear=new Date().getFullYear();
+  const currentYearShort=currentYear%100;
+  let match=dateStr.match(/(\d{2,4})年\s*(\d{1,2})月(?:\s*(\d{1,2})日?)?/);
+  if(match){
+    let year=parseInt(match[1]);
+    const month=parseInt(match[2]);
+    const day=match[3]?parseInt(match[3]):1;
+    if(year<100)year=2000+year;
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  match=dateStr.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if(match){
+    const year=parseInt(match[1]),month=parseInt(match[2]),day=parseInt(match[3]);
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  match=dateStr.match(/(\d{2,4})年\s*(\d{1,2})月\s*(\d{1,2})日?/);
+  if(match){
+    let year=parseInt(match[1]);
+    const month=parseInt(match[2]);
+    const day=match[3]?parseInt(match[3]):1;
+    if(year<100)year=2000+year;
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  match=dateStr.match(/(\d{2,4})[年-](\d{1,2})/);
+  if(match&&!dateStr.match(/\d{1,2}[日号]/)){
+    let year=parseInt(match[1]);
+    const month=parseInt(match[2]);
+    if(year<100)year=2000+year;
+    return `${year}-${String(month).padStart(2,'0')}-01`;
+  }
+  console.warn('无法解析保质期格式:',dateStr);
+  return null;
+}
+
+// 解析识别结果
+function parseRecognitionResult(result){
+  try{
+    let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
+    if(jsonStr.startsWith('```')){
+      const lines=jsonStr.split('\n');
+      jsonStr=lines.slice(1,-1).join('\n');
+    }
+    if(jsonStr.startsWith('```json')){
+      const lines=jsonStr.split('\n');
+      jsonStr=lines.slice(1,-1).join('\n');
+    }
+    const jsonMatch=jsonStr.match(/\{[\s\S]*\}/);
+    if(jsonMatch)jsonStr=jsonMatch[0];
+    return JSON.parse(jsonStr);
+  }catch(e){
+    console.error('解析识别结果失败',e);
+    return extractFromText(result.choices?.[0]?.message?.content||'');
+  }
+}
+
+// 从文本中提取信息（fallback）
+function extractFromText(text){
+  const result={};
+  const nameMatch=text.match(/品名[：:]\s*([^\n]+)/i)||text.match(/name[：:]\s*([^\n]+)/i);
+  if(nameMatch)result.name=nameMatch[1].trim();
+  const brandMatch=text.match(/品牌[：:]\s*([^\n]+)/i)||text.match(/brand[：:]\s*([^\n]+)/i);
+  if(brandMatch)result.brand=brandMatch[1].trim();
+  const sizeMatch=text.match(/容量[：:]\s*(\d+)/i)||text.match(/packageSize[：:]\s*(\d+)/i)||text.match(/(\d+)\s*(ml|g|个|抽|卷)/i);
+  if(sizeMatch){
+    result.packageSize=parseInt(sizeMatch[1]);
+    const unitMatch=text.match(/(ml|g|个|抽|卷|瓶)/i);
+    if(unitMatch)result.unit=unitMatch[1].toLowerCase();
+  }
+  const qtyMatch=text.match(/数量[：:]\s*(\d+)/i)||text.match(/qty[：:]\s*(\d+)/i);
+  if(qtyMatch)result.qty=parseInt(qtyMatch[1]);
+  const expMatch=text.match(/保质期[：:]\s*([^\n]+)/i)||text.match(/expiryDate[：:]\s*([^\n]+)/i);
+  if(expMatch)result.expiryDate=normalizeExpiryDate(expMatch[1].trim());
+  return result;
+}
+
+// 验证 API 配置
+function verifyApiConfig(){
+  const apiKey=getApiKey();
+  const config=OPENROUTER_CONFIG;
+  if(!apiKey)throw new Error('API Key 未配置，请检查 config.js');
+  if(!apiKey.startsWith('sk-or-v1-'))console.warn('⚠️ API Key 格式可能不正确，OpenRouter Key 通常以 sk-or-v1- 开头');
+  return {apiKey,config};
+}
+
+// 单张照片识别
+async function recognizePhoto(imageFile){
+  const {apiKey}=verifyApiConfig();
+  const base64Data=await imageToBase64(imageFile);
+  const base64Url=`data:image/jpeg;base64,${base64Data}`;
+  const prompt=`请仔细识别这张图片中的商品信息，返回严格的 JSON 格式（不要包含任何其他文字）：
+
+{
+  "name": "品名",
+  "brand": "品牌",
+  "packageSize": 250,
+  "unit": "ml",
+  "qty": 1,
+  "expiryDate": "2026-12-31"
+}
+
+识别要求：
+1. name（品名）：提取商品的具体名称，如"洗面奶"、"洗发水"、"牙膏"等，要简洁准确
+2. brand（品牌）：提取品牌名称，如"可复美"、"多芬"等。如果图片中没有品牌信息，返回空字符串 ""
+3. packageSize（单件容量）：提取单件/单包的容量数字，如 250、100、500 等。只返回数字，不要单位
+4. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
+5. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
+6. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片中没有保质期信息或完全无法识别，返回 null
+
+重要：
+- 只返回 JSON 对象，不要包含 markdown 代码块标记（三个反引号加json等）
+- 不要添加任何解释文字
+- 日期格式必须严格遵循 YYYY-MM-DD
+- 如果某个字段无法识别，使用合理的默认值（name 和 brand 可以是空字符串，packageSize 可以是 0，qty 默认 1，expiryDate 可以是 null）`;
+  const controller=new AbortController();
+  const timeoutMs=OPENROUTER_CONFIG.timeout;
+  const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${apiKey}`,
+        'Content-Type':'application/json',
+        'HTTP-Referer':'https://pantry.local',
+        'X-Title':'Pantry'
+      },
+      body:JSON.stringify({
+        model:OPENROUTER_CONFIG.model,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'text',text:prompt},
+            {type:'image_url',image_url:{url:base64Url}}
+          ]
+        }],
+        max_tokens:500
+      }),
+      signal:controller.signal
+    });
+    clearTimeout(timeoutId);
+    if(!response.ok){
+      let errorData;
+      try{errorData=await response.json();}catch(e){errorData={error:{message:`HTTP ${response.status}: ${response.statusText}`}};}
+      throw new Error(errorData.error?.message||`API 错误: ${response.status} ${response.statusText}`);
+    }
+    const result=await response.json();
+    const parsed=parseRecognitionResult(result);
+    if(parsed.expiryDate){
+      const originalExpiry=parsed.expiryDate;
+      parsed.expiryDate=normalizeExpiryDate(parsed.expiryDate);
+      if(parsed.expiryDate===originalExpiry){
+        const expiryDate=new Date(parsed.expiryDate);
+        const today=new Date();today.setHours(0,0,0,0);
+        if(expiryDate<today)console.warn('⚠️⚠️⚠️ 重要提示：识别出的保质期是过去日期，请仔细检查图片中的年份是否正确！');
+      }
+    }
+    return parsed;
+  }catch(e){
+    clearTimeout(timeoutId);
+    if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
+      throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
+    }
+    if(e.name==='AbortError')throw new Error(`识别超时（${timeoutMs/1000}秒），请重试或检查网络连接。如果图片较大，可能需要更长时间。`);
+    if(e.message)throw e;
+    throw new Error(`API调用失败: ${e.toString()}`);
+  }
+}
+
+// 订单截图识别（批量）
+async function recognizeOrder(imageFile){
+  const apiKey=getApiKey();
+  if(!apiKey)throw new Error('请先配置 API Key');
+  const base64Data=await imageToBase64(imageFile);
+  const base64Url=`data:image/jpeg;base64,${base64Data}`;
+  const prompt=`请识别这张订单截图中的所有商品，返回 JSON 数组格式：
+[
+  {
+    "name": "品名",
+    "brand": "品牌",
+    "packageSize": 250,
+    "unit": "ml",
+    "qty": 1,
+    "expiryDate": "2026-12-31"
+  }
+]
+
+要求：
+1. 识别所有商品，每个商品一个对象
+2. 字段说明同上（name/brand/packageSize/unit/qty/expiryDate）
+3. 如果某个字段无法识别，使用合理的默认值
+4. 只返回 JSON 数组，不要其他文字`;
+  const controller=new AbortController();
+  const timeoutMs=OPENROUTER_CONFIG.timeout*2;
+  const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${apiKey}`,
+        'Content-Type':'application/json',
+        'HTTP-Referer':'https://pantry.local',
+        'X-Title':'Pantry'
+      },
+      body:JSON.stringify({
+        model:OPENROUTER_CONFIG.model,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'text',text:prompt},
+            {type:'image_url',image_url:{url:base64Url}}
+          ]
+        }],
+        max_tokens:2000
+      }),
+      signal:controller.signal
+    });
+    clearTimeout(timeoutId);
+    if(!response.ok){
+      const errorData=await response.json().catch(()=>({}));
+      throw new Error(errorData.error?.message||`API 错误: ${response.status}`);
+    }
+    const result=await response.json();
+    let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
+    if(jsonStr.startsWith('```')){
+      const lines=jsonStr.split('\n');
+      jsonStr=lines.slice(1,-1).join('\n');
+    }
+    const jsonMatch=jsonStr.match(/\[[\s\S]*\]/);
+    if(jsonMatch)jsonStr=jsonMatch[0];
+    const items=JSON.parse(jsonStr);
+    return Array.isArray(items)?items:[items];
+  }catch(e){
+    clearTimeout(timeoutId);
+    if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
+      throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
+    }
+    if(e.name==='AbortError')throw new Error(`订单识别超时（${timeoutMs/1000}秒），请重试或检查网络连接`);
+    throw e;
+  }
+}
+
+// 创建隐藏的文件输入
+let _fileInput=null;
+function createFileInput(type,callback){
+  if(_fileInput)_fileInput.remove();
+  _fileInput=document.createElement('input');
+  _fileInput.type='file';
+  _fileInput.accept='image/*';
+  _fileInput.style.display='none';
+  _fileInput.onchange=async e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    try{
+      await callback(file);
+    }catch(err){
+      console.error('识别失败',err);
+      showError(err.message||'识别失败，请重试');
+      cancelScan();
+    }
+    _fileInput.value='';
+  };
+  _fileInput.oncancel=()=>cancelScan();
+  document.body.appendChild(_fileInput);
+  _fileInput.click();
+}
+
+function doScan(type){
+  createFileInput('image',async file=>{
+    const ov=document.getElementById('scan-ov');
+    document.getElementById('scan-lbl').textContent=type==='photo'?'拍照识别中':'读取订单截图';
+    ov.classList.add('show');
+    const fileSizeMB=(file.size/1024/1024).toFixed(1);
+    if(file.size>5*1024*1024){
+      document.getElementById('scan-step').textContent=`文件较大(${fileSizeMB}MB)，正在压缩…`;
+    }else{
+      document.getElementById('scan-step').textContent='图像预处理…';
+    }
+    const steps=['图像预处理…','压缩优化…','调用AI识别…','解析结果…','整理数据…'];
+    let stepIndex=0;
+    _scanTmr=setInterval(()=>{
+      if(stepIndex<steps.length){
+        document.getElementById('scan-step').textContent=steps[stepIndex];
+        stepIndex++;
+      }
+    },500);
+    try{
+      let result;
+      if(type==='photo'){
+        clearInterval(_scanTmr);
+        document.getElementById('scan-step').textContent='调用AI识别中…';
+        result=await recognizePhoto(file);
+        if(!result||(typeof result==='object'&&Object.keys(result).length===0)){
+          throw new Error('识别结果为空，请重试或手动输入');
+        }
+        fillRecognitionResult(result);
+      }else{
+        clearInterval(_scanTmr);
+        document.getElementById('scan-step').textContent='识别订单中的商品…';
+        result=await recognizeOrder(file);
+        if(Array.isArray(result)&&result.length>0){
+          clearInterval(_scanTmr);
+          document.getElementById('scan-step').textContent=`找到${result.length}个商品`;
+          // 保存订单识别结果，用于后续逐个确认录入
+          window._orderItems=result;
+          window._currentOrderIndex=0;
+          // 填充第一个商品到表单
+          fillOrderRecognitionResult(result[0],result.length);
+          return;
+        }else{
+          throw new Error('订单识别结果为空，请重试或手动输入');
+        }
+      }
+    }catch(err){
+      console.error('识别失败',err);
+      clearInterval(_scanTmr);
+      document.getElementById('scan-ov').classList.remove('show');
+      let errorMsg='识别失败，请重试';
+      if(err.message){
+        if(err.message.includes('HEIC'))errorMsg=err.message;
+        else if(err.message.includes('API'))errorMsg=`API调用失败: ${err.message}`;
+        else if(err.message.includes('超时'))errorMsg='识别超时，请重试或检查网络连接';
+        else if(err.message.includes('API Key'))errorMsg='请先配置 API Key';
+        else errorMsg=err.message;
+      }
+      showError(errorMsg);
+      document.getElementById('recog-result').style.display='none';
+      document.getElementById('manual-form').style.display='block';
+    }
+  });
+}
+
+// 填充识别结果到表单（单张照片）
+function fillRecognitionResult(result){
+  clearInterval(_scanTmr);
+  document.getElementById('scan-ov').classList.remove('show');
+  if(!result){
+    showError('识别结果为空，请重试或手动输入');
+    return;
+  }
+  const recogForm=document.getElementById('recog-result');
+  const manualForm=document.getElementById('manual-form');
+  if(!recogForm||!manualForm){
+    showError('页面元素缺失，请刷新页面重试');
+    return;
+  }
+  recogForm.style.display='block';
+  manualForm.style.display='none';
+  fillFormFields(result);
+}
+
+// 填充订单识别结果到表单（订单截图，可能多个商品）
+function fillOrderRecognitionResult(item,totalCount){
+  clearInterval(_scanTmr);
+  document.getElementById('scan-ov').classList.remove('show');
+  if(!item){
+    showError('识别结果为空，请重试或手动输入');
+    return;
+  }
+  const recogForm=document.getElementById('recog-result');
+  const manualForm=document.getElementById('manual-form');
+  if(!recogForm||!manualForm){
+    showError('页面元素缺失，请刷新页面重试');
+    return;
+  }
+  recogForm.style.display='block';
+  manualForm.style.display='none';
+  // 更新表单标题，显示当前是第几个商品
+  const formHd=document.querySelector('#recog-result .form-hd-t');
+  if(formHd&&totalCount>1){
+    formHd.textContent=`AI 识别结果 (${window._currentOrderIndex+1}/${totalCount})`;
+  }else if(formHd){
+    formHd.textContent='AI 识别结果';
+  }
+  fillFormFields(item);
+}
+
+// 填充表单字段（通用函数）
+function fillFormFields(result){
+  const nameEl=document.getElementById('fi-name');
+  const brandEl=document.getElementById('fi-brand');
+  const sizeEl=document.getElementById('fi-size');
+  const qtyEl=document.getElementById('fi-qty');
+  const expEl=document.getElementById('fi-exp');
+  if(nameEl){
+    nameEl.value=result.name||'';
+    if(result.name)autoDetect(result.name);
+  }
+  if(brandEl)brandEl.value=result.brand||'';
+  if(sizeEl)sizeEl.value=result.packageSize||'';
+  if(result.unit){
+    const unitEl=document.getElementById('mf-unit');
+    if(unitEl)unitEl.textContent=result.unit;
+  }
+  if(qtyEl)qtyEl.value=result.qty||1;
+  if(expEl)expEl.value=result.expiryDate||'';
+  const badgeEl=document.getElementById('detected-cat-badge');
+  if(badgeEl){
+    if(result.name){
+      const d=detectItem(result.name);
+      if(d)badgeEl.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${shapeName(d.shape)}</div>`;
+      else badgeEl.innerHTML='';
+    }else badgeEl.innerHTML='';
+  }
+}
+
+function cancelScan(){
+  clearInterval(_scanTmr);
+  document.getElementById('scan-ov').classList.remove('show');
+  if(_fileInput)_fileInput.value='';
+}
+
+function confirmAdd(){
+  const isManual=document.getElementById('manual-form').style.display!=='none';
+  const name=isManual?document.getElementById('mf-name').value:document.getElementById('fi-name').value;
+  const brand=isManual?document.getElementById('mf-brand').value:document.getElementById('fi-brand').value;
+  const size=parseInt(isManual?document.getElementById('mf-size').value:document.getElementById('fi-size').value)||250;
+  const qty=parseInt(isManual?document.getElementById('mf-qty').value:document.getElementById('fi-qty').value)||1;
+  const exp=isManual?document.getElementById('mf-exp').value:document.getElementById('fi-exp').value;
+  const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
+
+  const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
+
+  const newItem={
+    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,
+    packageSize:size,unit:d.unit,activePercent:100,openCount:1,stockCount:Math.max(0,qty-1),
+    dailyUse:d.daily,color:d.color,shape:d.shape,
+    expiryDate:exp||null,openedDate:today(),location:location||null,
+    logs:[{type:'录入',desc:`购入×${qty}`,delta:size*qty,date:today()}],
+    openItems:[100] // 初始化openItems数组
+  };
+  items.push(newItem);
+  save();
+  
+  // 检查是否是订单识别的批量录入
+  if(window._orderItems&&Array.isArray(window._orderItems)&&window._currentOrderIndex!==undefined){
+    window._currentOrderIndex++;
+    // 如果还有下一个商品，继续填充
+    if(window._currentOrderIndex<window._orderItems.length){
+      fillOrderRecognitionResult(window._orderItems[window._currentOrderIndex],window._orderItems.length);
+      return;
+    }else{
+      // 所有商品都已录入完成
+      window._orderItems=null;
+      window._currentOrderIndex=undefined;
+    }
+  }
+  
+  nav('scr-home');
+  if(activeTab===0)renderDashboard();else renderGallery();
+  updateAlert();
+  document.getElementById('recog-result').style.display='none';
+  document.getElementById('manual-form').style.display='block';
+  document.getElementById('mf-name').value='';
+  document.getElementById('mf-detect-badge').innerHTML='';
+  _lastDetected=null;
+}
+
+// ═══════════════════════════════════════════════
+//  DAILY DEDUCTION
+// ═══════════════════════════════════════════════
+function runDeduction(){
+  const key='pantry_deduct_v4';
+  const now=Date.now();
+  const last=parseInt(localStorage.getItem(key)||'0');
+  const days=Math.floor((now-last)/86400000);
+  if(days<=0)return;
+  const log=[];
+  items.forEach(item=>{
+    if(!item.dailyUse)return;
+    const dPct=(item.dailyUse*days/item.packageSize)*100;
+    const before=item.activePercent;
+    item.activePercent=+Math.max(0,item.activePercent-dPct).toFixed(1);
+    const actual=+(before-item.activePercent).toFixed(1);
+    if(actual>0.05){log.push(`${item.name} −${+(actual/100*item.packageSize).toFixed(1)}${item.unit}`);item.logs.push({type:'自动',desc:`每日扣减×${days}天`,delta:-+(actual/100*item.packageSize).toFixed(1),date:today()});}
+  });
+  localStorage.setItem(key,String(now));save();
+  if(log.length){document.getElementById('dt-body').textContent=`间隔${days}天 · `+log.join('  ');const t=document.getElementById('deduct-toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000);}
+}
+
+// ═══════════════════════════════════════════════
+//  NAV
+// ═══════════════════════════════════════════════
+let _curScr='scr-home';
+function nav(id){
+  if(id===_curScr)return;
+  const c=document.getElementById(_curScr);
+  const n=document.getElementById(id);
+  if(!c||!n){
+    console.error('nav: screen not found',{from:_curScr,to:id});
+    return;
+  }
+  // 确保旧页面有active类才能正确执行out动画
+  if(c.classList.contains('active')){
+    c.classList.add('out');
+    setTimeout(()=>c.classList.remove('active','out'),230);
+  }else{
+    // 如果旧页面没有active类，直接移除所有类
+    c.classList.remove('active','out');
+  }
+  // 确保新页面移除out类后再添加active类
+  n.classList.remove('out');
+  n.classList.add('active');
+  _curScr=id;
+  if(id==='scr-add'){
+    initLocationSelects();
+  }
+  // 如果切换到主页，自动刷新页面内容
+  if(id==='scr-home'){
+    if(activeTab===0)renderDashboard();
+    else renderGallery();
+    updateAlert();
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+// 应用字号设置
+applyFontSize(loadFontSize());
+
+const now2=new Date();
+document.getElementById('today-str').textContent=
+  now2.getFullYear()+'.'+String(now2.getMonth()+1).padStart(2,'0')+'.'+String(now2.getDate()).padStart(2,'0');
+
+// 初始化Tab状态，确保FAB按钮正确显示
+switchTab(0);
+updateAlert();
+
+setTimeout(()=>{
+  const key='pantry_deduct_v4';
+  if(!localStorage.getItem(key)) localStorage.setItem(key,String(Date.now()-86400000*2));
+  runDeduction();
+},900);
+</script>
+</body>
+</html>
