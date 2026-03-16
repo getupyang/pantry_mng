@@ -1398,13 +1398,15 @@ function setupDrag(el,id,isDetail,openIndex=0){
     item.openItems=Array.from({length:item.openCount||1},()=>initPct);
     item.openCount=item.openItems.length;
   }
-  let down=false,dragging=false,sy=0,sv=0;
+  let down=false,dragging=false,sy=0,sx=0,sv=0;
   const gY=e=>e.touches?e.touches[0].clientY:e.clientY;
+  const gX=e=>e.touches?e.touches[0].clientX:e.clientX;
 
   // ── pointer down ──
   const onDown=e=>{
     down=true;dragging=false;
     sy=gY(e);
+    sx=gX(e);
     if(isDetail){
       // 详情页：使用选中单件的百分比
       const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
@@ -1430,6 +1432,7 @@ function setupDrag(el,id,isDetail,openIndex=0){
   const onMove=e=>{
     if(!down)return;
     const dy=sy-gY(e);
+    const dx=gX(e)-sx;
     if(!dragging&&Math.abs(dy)<DRAG_THRESHOLD)return;
     dragging=true;
     const newPct=Math.round(Math.max(0,Math.min(100,sv+dy/82*100)));
@@ -1461,7 +1464,9 @@ function setupDrag(el,id,isDetail,openIndex=0){
   el.addEventListener('touchmove',e=>{
     if(!down)return;
     const dy=sy-gY(e);
-    if(Math.abs(dy)>=DRAG_THRESHOLD){
+    const dx=(e.touches&&e.touches[0]?e.touches[0].clientX:gX(e))-sx;
+    // 只有在明显是纵向拖动时，才拦截事件，避免误伤返回/滚动手势
+    if(Math.abs(dy)>=DRAG_THRESHOLD && Math.abs(dy)>=Math.abs(dx)*1.5){
       e.stopPropagation();
       onMove(e.touches[0]||e);
     }
@@ -2534,6 +2539,36 @@ function nav(id){
     updateAlert();
   }
 }
+
+// iPhone 风格：从左侧边缘右滑返回上一页
+let _swipeStartX=0,_swipeStartY=0,_swipeActive=false;
+document.addEventListener('touchstart',e=>{
+  const t=e.touches[0];
+  if(!t)return;
+  // 仅在非首页，且从左侧 24px 内开始滑动时启用
+  if(_curScr!=='scr-home' && t.clientX<24){
+    _swipeStartX=t.clientX;
+    _swipeStartY=t.clientY;
+    _swipeActive=true;
+  }else{
+    _swipeActive=false;
+  }
+},{passive:true});
+
+document.addEventListener('touchmove',e=>{
+  if(!_swipeActive)return;
+  const t=e.touches[0];
+  if(!t)return;
+  const dx=t.clientX-_swipeStartX;
+  const dy=t.clientY-_swipeStartY;
+  // 只有在明显右滑且纵向位移不大时才触发
+  if(dx>40 && Math.abs(dy)<30){
+    _swipeActive=false;
+    e.preventDefault();
+    // 所有二级页面统一返回首页
+    nav('scr-home');
+  }
+},{passive:false});
 
 // ═══════════════════════════════════════════════
 //  INIT
