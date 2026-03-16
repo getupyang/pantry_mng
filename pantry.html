@@ -98,10 +98,11 @@ input,textarea,.finput,.rate-inp{
 /* summary row */
 .dash-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
 .dash-sum-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;box-shadow:0 1px 6px var(--shadow);}
-.dash-sum-val{font-size:var(--f-3xl)!important;font-weight:300!important;font-family:'DM Mono',monospace!important;letter-spacing:-.02em;line-height:1;min-height:1.15em;display:flex;align-items:flex-end;justify-content:center;}
-.dash-sum-val.red{color:var(--red);font-size:var(--f-3xl)!important;font-weight:300!important;}
-.dash-sum-val.amber{color:var(--amber);font-size:var(--f-3xl)!important;font-weight:300!important;}
-.dash-sum-val.green{color:var(--green);font-size:var(--f-3xl)!important;font-weight:300!important;}
+.dash-sum-val{font-size:var(--f-3xl);font-weight:300;font-family:'DM Mono',monospace;letter-spacing:-.02em;line-height:1;height:1.2em;display:flex;align-items:flex-end;justify-content:center;color:var(--text);}
+.dash-sum-val.dash-sum-red{color:var(--red);}
+.dash-sum-val.dash-sum-green{color:var(--green);}
+.dash-sum-val.dash-sum-amber{color:var(--amber);}
+.dash-sum-val.dash-sum-muted{color:var(--muted);}
 .dash-sum-label{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
 
 /* section title */
@@ -1427,15 +1428,15 @@ function renderDashboard(){
   let h=`
   <div class="dash-summary">
     <div class="dash-sum-card">
-      <div class="dash-sum-val" style="font-size:var(--f-3xl)!important;">${items.length}</div>
+      <div class="dash-sum-val">${items.length}</div>
       <div class="dash-sum-label">总计物品</div>
     </div>
     <div class="dash-sum-card">
-      <div class="dash-sum-val${lows.length?'.red':'.green'}" style="font-size:var(--f-3xl)!important;color:${lows.length?'var(--red)':'var(--green)'}!important;">${lows.length}</div>
+      <div class="dash-sum-val ${lows.length?'dash-sum-red':'dash-sum-green'}">${lows.length}</div>
       <div class="dash-sum-label">需要补货</div>
     </div>
     <div class="dash-sum-card">
-      <div class="dash-sum-val${exps.length+soon.length>0?'.amber':''}" style="font-size:var(--f-3xl)!important;color:${exps.length+soon.length>0?'var(--amber)':'var(--muted)'}!important;">${exps.length+soon.length}</div>
+      <div class="dash-sum-val ${exps.length+soon.length>0?'dash-sum-amber':'dash-sum-muted'}">${exps.length+soon.length}</div>
       <div class="dash-sum-label">保质期预警</div>
     </div>
   </div>`;
