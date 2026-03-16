@@ -512,6 +512,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
         </div>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       </div>
+      <div class="settings-item" onclick="openApiKeySettings()">
+        <div class="settings-item-icon">🔑</div>
+        <div class="settings-item-content">
+          <div class="settings-item-title">OpenRouter API Key</div>
+          <div class="settings-item-desc">配置本机用于图片识别的 API Key</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
     </div>
   </div>
 </div>
@@ -1099,6 +1107,38 @@ window.openFontSizeSettings=function(){
 window.selectFontSize=function(size){
   saveFontSize(size);
   closeSheet();
+};
+
+// OpenRouter API Key 管理
+window.openApiKeySettings=function(){
+  const currentKey=getApiKey();
+  const masked=currentKey?currentKey.replace(/.(?=.{4})/g,'•'):'';
+  const body=`<div style="padding:8px 0">
+    <div style="font-size:var(--f-sm);color:var(--muted);line-height:1.6;margin-bottom:10px">
+      OpenRouter 的 API Key 只会保存在本机浏览器的本地存储中，不会随库存数据一起导出或上传。
+    </div>
+    <div class="frow">
+      <span class="flabel">当前 Key</span>
+      <div style="flex:1;font-size:var(--f-sm);color:${currentKey?'var(--text2)':'var(--muted)'};min-height:20px">
+        ${currentKey?masked:'尚未配置'}
+      </div>
+    </div>
+    <div class="frow" style="margin-top:10px">
+      <span class="flabel">新的 Key</span>
+      <input class="finput" id="api-key-input" type="password" placeholder="以 sk-or-v1- 开头的 OpenRouter Key">
+    </div>
+  </div>`;
+  openSheet('配置 OpenRouter Key','',body,'保存',()=>{
+    const input=document.getElementById('api-key-input');
+    const value=input.value.trim();
+    if(!value){
+      showError('请输入有效的 API Key');
+      return;
+    }
+    setApiKey(value);
+    closeSheet();
+    showError('API Key 已保存到本机');
+  });
 };
 
 function initLocationSelects(){
