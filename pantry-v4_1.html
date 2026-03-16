@@ -1516,6 +1516,7 @@ function setupDrag(el,id,isDetail,openIndex=0){
     item.openCount=item.openItems.length;
   }
   let down=false,dragging=false,sy=0,sx=0,sv=0;
+  let framePending=false,lastDy=0;
   const gY=e=>e.touches?e.touches[0].clientY:e.clientY;
   const gX=e=>e.touches?e.touches[0].clientX:e.clientX;
 
@@ -1552,30 +1553,44 @@ function setupDrag(el,id,isDetail,openIndex=0){
     const dx=gX(e)-sx;
     if(!dragging&&Math.abs(dy)<DRAG_THRESHOLD)return;
     dragging=true;
-    const newPct=Math.round(Math.max(0,Math.min(100,sv+dy/82*100)));
-    
-    if(isDetail){
-      // 详情页：只更新选中单件的百分比，不影响其他件
-      const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
-      // 确保openItems数组存在
-      if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
-        const initPct=item.activePercent!==undefined?item.activePercent:100;
-        item.openItems=Array.from({length:item.openCount||1},()=>initPct);
-        item.openCount=item.openItems.length;
+    lastDy=dy;
+    if(framePending)return;
+    framePending=true;
+    requestAnimationFrame(()=>{
+      framePending=false;
+      const localDy=lastDy;
+      const newPct=Math.round(Math.max(0,Math.min(100,sv+localDy/82*100)));
+      
+      if(isDetail){
+        // 详情页：只更新选中单件的百分比，不影响其他件
+        const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
+        // 确保openItems数组存在
+        if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
+          const initPct=item.activePercent!==undefined?item.activePercent:100;
+          item.openItems=Array.from({length:item.openCount||1},()=>initPct);
+          item.openCount=item.openItems.length;
+        }
+        // 确保索引在有效范围内，只更新这一个索引的值
+        const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
+        item.openItems[safeIdx]=newPct;
+        // 更新SVG显示（只显示当前选中单件的百分比）
+        updateSVGLevel({...item,activePercent:newPct},isDetail);
+        // 轻量更新详情页数字，避免整页重绘
+        const vEl=document.getElementById('d-v');
+        const pctEl=document.getElementById('d-pct');
+        if(vEl&&pctEl){
+          const val=newPct===0?'空':+(item.packageSize*newPct/100).toFixed(1);
+          vEl.textContent=val;
+          pctEl.textContent=newPct+'%';
+        }
+      }else{
+        // 画廊页：更新平均百分比（向后兼容）
+        item.activePercent=newPct;
+        updateSVGLevel(item,isDetail);
+        refreshGCard(item);
+        updateAlert();
       }
-      // 确保索引在有效范围内，只更新这一个索引的值
-      const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
-      item.openItems[safeIdx]=newPct;
-      // 更新SVG显示（只显示当前选中单件的百分比）
-      updateSVGLevel({...item,activePercent:newPct},isDetail);
-      refreshDetailPage(id);
-    }else{
-      // 画廊页：更新平均百分比（向后兼容）
-      item.activePercent=newPct;
-      updateSVGLevel(item,isDetail);
-      refreshGCard(item);
-      updateAlert();
-    }
+    });
   };
   document.addEventListener('mousemove',onMove);
   el.addEventListener('touchmove',e=>{
