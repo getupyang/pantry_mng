@@ -44,6 +44,14 @@
 }
 html,body{height:100%;overflow:hidden;}
 body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--text);display:flex;flex-direction:column;font-size:var(--f-base);}
+body{
+  -webkit-user-select:none;
+  user-select:none;
+}
+input,textarea,.finput,.rate-inp{
+  -webkit-user-select:text;
+  user-select:text;
+}
 
 /* ── screens ── */
 .screen{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;transform:translateX(14px);overflow:hidden;}
@@ -512,6 +520,22 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
         </div>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       </div>
+      <div class="settings-item" onclick="exportPantryData()">
+        <div class="settings-item-icon">⬇️</div>
+        <div class="settings-item-content">
+          <div class="settings-item-title">导出数据（JSON）</div>
+          <div class="settings-item-desc">下载本机所有物品数据为 JSON 文件</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="settings-item" onclick="openImportPantryData()">
+        <div class="settings-item-icon">⬆️</div>
+        <div class="settings-item-content">
+          <div class="settings-item-title">导入数据（JSON）</div>
+          <div class="settings-item-desc">从导出的 JSON 文件恢复到本机</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8 6L4.5 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
       <div class="settings-item" onclick="openApiKeySettings()">
         <div class="settings-item-icon">🔑</div>
         <div class="settings-item-content">
@@ -958,7 +982,24 @@ const DEFAULT=[
 ];
 
 let items=loadItems();
-function loadItems(){try{const s=localStorage.getItem('pantry_v4');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT));}catch{return JSON.parse(JSON.stringify(DEFAULT));}}
+function isMockData(data){
+  if(!Array.isArray(data))return false;
+  if(data.length!==DEFAULT.length)return false;
+  const first=data[0]||{};
+  return first.name==='神仙水'&&first.brand==='SK-II';
+}
+function loadItems(){
+  try{
+    const s=localStorage.getItem('pantry_v4');
+    if(!s)return [];
+    const data=JSON.parse(s);
+    // 如果检测到仍然是内置示例数据，视为“无真实数据”
+    if(isMockData(data))return [];
+    return data;
+  }catch{
+    return [];
+  }
+}
 function save(){try{localStorage.setItem('pantry_v4',JSON.stringify(items));}catch{}}
 
 // ═══════════════════════════════════════════════
@@ -1107,6 +1148,82 @@ window.openFontSizeSettings=function(){
 window.selectFontSize=function(size){
   saveFontSize(size);
   closeSheet();
+};
+
+// 导入导出数据
+function buildExportPayload(){
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    items,
+    locations: loadLocations()
+  };
+}
+
+window.exportPantryData=function(){
+  try{
+    const payload=buildExportPayload();
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    const now=new Date();
+    const stamp=now.getFullYear().toString()+
+      String(now.getMonth()+1).padStart(2,'0')+
+      String(now.getDate()).padStart(2,'0');
+    a.href=URL.createObjectURL(blob);
+    a.download=`pantry-export-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    console.error('导出失败',e);
+    showError('导出失败，请稍后重试');
+  }
+};
+
+window.openImportPantryData=function(){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='application/json';
+  input.style.position='fixed';
+  input.style.left='-9999px';
+  input.style.top='-9999px';
+  document.body.appendChild(input);
+  input.onchange=async e=>{
+    const file=e.target.files&&e.target.files[0];
+    if(!file)return;
+    try{
+      const text=await file.text();
+      let data=JSON.parse(text);
+      // 兼容旧格式：直接是数组
+      if(Array.isArray(data)){
+        data={version:1,items:data,locations:[]};
+      }
+      if(!Array.isArray(data.items)){
+        throw new Error('JSON 格式不正确：缺少 items 数组');
+      }
+      items=data.items;
+      save();
+      if(Array.isArray(data.locations)){
+        saveLocations(data.locations);
+      }
+      // 刷新界面
+      if(_curScr==='scr-home'){
+        if(activeTab===0)renderDashboard();
+        else renderGallery();
+        updateAlert();
+      }else{
+        nav('scr-home');
+      }
+      showError(`导入成功，共 ${items.length} 个物品`);
+    }catch(err){
+      console.error('导入失败',err);
+      showError('导入失败，请确认选择的是通过本应用导出的 JSON 文件');
+    }finally{
+      document.body.removeChild(input);
+    }
+  };
+  input.click();
 };
 
 // OpenRouter API Key 管理
@@ -1568,9 +1685,10 @@ function openDetail(id){
         <div class="d-action-btns">
           ${item.openCount>1?`<button class="d-act-btn danger" onclick="openRetire('${item.id}')">移除空件</button>`:''}
           ${isEmpty&&item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">取出新件 →</button>`:''}
-        </div>
-      </div>
     </div>
+  </div>
+</div>
+
   </div>
   <div class="d-sec">
     <div class="d-sec-title">库存货架（${item.stockCount}件未开封）</div>
