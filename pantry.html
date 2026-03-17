@@ -2691,6 +2691,7 @@ function nav(id){
   _curScr=id;
   if(id==='scr-add'){
     initLocationSelects();
+    ensureExpiryInputsVisible();
   }
   // 如果切换到主页，自动刷新页面内容
   if(id==='scr-home'){
@@ -2698,6 +2699,29 @@ function nav(id){
     else renderGallery();
     updateAlert();
   }
+}
+
+// iPhone Safari：部分机型/版本对 input[type=date] 支持不稳定，确保保质期输入可见可用
+function ensureExpiryInputsVisible(){
+  const isIOS=/iP(hone|od|ad)/.test(navigator.userAgent);
+  const els=[document.getElementById('mf-exp'),document.getElementById('fi-exp')].filter(Boolean);
+  if(!els.length)return;
+  // 不在 iOS 上不做任何改动，保持原有日期选择体验
+  if(!isIOS)return;
+  els.forEach(el=>{
+    // 若已是非 date，避免重复处理
+    if((el.getAttribute('type')||'').toLowerCase()!=='date')return;
+    // 在 iOS 上统一降级为文本输入，避免 date 控件不显示/不可点
+    el.setAttribute('type','text');
+    el.setAttribute('placeholder','YYYY-MM-DD');
+    el.setAttribute('inputmode','numeric');
+    el.addEventListener('blur',()=>{
+      const v=(el.value||'').trim();
+      if(!v)return;
+      const norm=normalizeExpiryDate(v);
+      el.value=norm||'';
+    },{once:false});
+  });
 }
 
 // iPhone 风格：从左侧边缘右滑返回上一页
@@ -2735,6 +2759,7 @@ document.addEventListener('touchmove',e=>{
 // ═══════════════════════════════════════════════
 // 应用字号设置
 applyFontSize(loadFontSize());
+ensureExpiryInputsVisible();
 
 const now2=new Date();
 document.getElementById('today-str').textContent=
