@@ -2239,16 +2239,13 @@ function extractFromText(text){
 
 // 验证 API 配置
 function verifyApiConfig(){
-  const apiKey=getApiKey();
   const config=OPENROUTER_CONFIG;
-  if(!apiKey)throw new Error('API Key 未配置，请检查 config.js');
-  if(!apiKey.startsWith('sk-or-v1-'))console.warn('⚠️ API Key 格式可能不正确，OpenRouter Key 通常以 sk-or-v1- 开头');
-  return {apiKey,config};
+  return {config};
 }
 
 // 单张照片识别
 async function recognizePhoto(imageFile){
-  const {apiKey}=verifyApiConfig();
+  verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
   const prompt=`请仔细识别这张图片中的商品信息，返回严格的 JSON 格式（不要包含任何其他文字）：
@@ -2282,10 +2279,7 @@ async function recognizePhoto(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:{
-        'Authorization':`Bearer ${apiKey}`,
-        'Content-Type':'application/json',
-        'HTTP-Referer':'https://pantry.local',
-        'X-Title':'Pantry'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({
         model:OPENROUTER_CONFIG.model,
@@ -2331,8 +2325,7 @@ async function recognizePhoto(imageFile){
 
 // 订单截图识别（批量）
 async function recognizeOrder(imageFile){
-  const apiKey=getApiKey();
-  if(!apiKey)throw new Error('请先配置 API Key');
+  verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
   const prompt=`请识别这张订单截图中的所有商品，返回 JSON 数组格式：
@@ -2360,10 +2353,7 @@ async function recognizeOrder(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:{
-        'Authorization':`Bearer ${apiKey}`,
-        'Content-Type':'application/json',
-        'HTTP-Referer':'https://pantry.local',
-        'X-Title':'Pantry'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({
         model:OPENROUTER_CONFIG.model,

@@ -1008,6 +1008,15 @@ const DEFAULT=[
 ];
 
 let items=loadItems();
+const PANTRY_ITEMS_KEY='pantry_v4';
+const PANTRY_LOCATIONS_KEY='pantry_locations';
+const PANTRY_CLIENT_ID_KEY='pantry_client_id';
+const PANTRY_FAMILY_ID_KEY='pantry_family_id';
+const PANTRY_FAMILY_VERSION_KEY='pantry_family_version';
+let pantryFamilyId=localStorage.getItem(PANTRY_FAMILY_ID_KEY)||null;
+let pantryFamilyVersion=parseInt(localStorage.getItem(PANTRY_FAMILY_VERSION_KEY)||'0');
+let cloudReady=false;
+let cloudSyncTimer=null;
 function isMockData(data){
   if(!Array.isArray(data))return false;
   if(data.length!==DEFAULT.length)return false;
@@ -1016,7 +1025,7 @@ function isMockData(data){
 }
 function loadItems(){
   try{
-    const s=localStorage.getItem('pantry_v4');
+    const s=localStorage.getItem(PANTRY_ITEMS_KEY);
     if(!s)return [];
     const data=JSON.parse(s);
     // 如果检测到仍然是内置示例数据，视为“无真实数据”
@@ -1026,14 +1035,97 @@ function loadItems(){
     return [];
   }
 }
-function save(){try{localStorage.setItem('pantry_v4',JSON.stringify(items));}catch{}}
+function save(){
+  try{localStorage.setItem(PANTRY_ITEMS_KEY,JSON.stringify(items));}catch{}
+  queueCloudSync();
+}
+
+function getOrCreateClientId(){
+  let id=localStorage.getItem(PANTRY_CLIENT_ID_KEY);
+  if(!id){
+    id=crypto.randomUUID();
+    localStorage.setItem(PANTRY_CLIENT_ID_KEY,id);
+  }
+  return id;
+}
+
+function getCurrentPayload(){
+  return {items,locations:loadLocations()};
+}
+
+function setFamilyMeta(familyId,version){
+  pantryFamilyId=familyId;
+  pantryFamilyVersion=version;
+  localStorage.setItem(PANTRY_FAMILY_ID_KEY,familyId);
+  localStorage.setItem(PANTRY_FAMILY_VERSION_KEY,String(version));
+}
+
+function applyCloudData(data){
+  const nextItems=Array.isArray(data?.items)?data.items:[];
+  const nextLocations=Array.isArray(data?.locations)?data.locations:[];
+  items=nextItems;
+  try{localStorage.setItem(PANTRY_ITEMS_KEY,JSON.stringify(nextItems));}catch{}
+  try{localStorage.setItem(PANTRY_LOCATIONS_KEY,JSON.stringify(nextLocations));}catch{}
+}
+
+async function ensureFamily(){
+  const clientId=getOrCreateClientId();
+  const resp=await fetch('/api/families/ensure',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({clientId})
+  });
+  if(!resp.ok)throw new Error('初始化云端家庭失败');
+  return await resp.json();
+}
+
+async function pushCloudNow(){
+  if(!cloudReady||!pantryFamilyId)return;
+  const clientId=getOrCreateClientId();
+  const payload=getCurrentPayload();
+  const resp=await fetch(`/api/families/${encodeURIComponent(pantryFamilyId)}`,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json','X-Client-Id':clientId},
+    body:JSON.stringify({baseVersion:pantryFamilyVersion,data:payload})
+  });
+  if(resp.status===409){
+    const latest=await resp.json();
+    if(latest?.serverData){
+      applyCloudData(latest.serverData);
+      pantryFamilyVersion=latest.serverVersion||pantryFamilyVersion;
+      localStorage.setItem(PANTRY_FAMILY_VERSION_KEY,String(pantryFamilyVersion));
+      if(_curScr==='scr-home'){
+        if(activeTab===0)renderDashboard();else renderGallery();
+        updateAlert();
+      }
+      showError('检测到其他设备更新，已自动拉取最新数据');
+    }
+    return;
+  }
+  if(!resp.ok){
+    throw new Error('云端保存失败');
+  }
+  const data=await resp.json();
+  if(typeof data?.version==='number'){
+    pantryFamilyVersion=data.version;
+    localStorage.setItem(PANTRY_FAMILY_VERSION_KEY,String(pantryFamilyVersion));
+  }
+}
+
+function queueCloudSync(){
+  if(!cloudReady||!pantryFamilyId)return;
+  if(cloudSyncTimer)clearTimeout(cloudSyncTimer);
+  cloudSyncTimer=setTimeout(()=>{
+    pushCloudNow().catch(e=>console.error('云端同步失败',e));
+  },700);
+}
 
 // ═══════════════════════════════════════════════
 //  LOCATION MANAGEMENT
 // ═══════════════════════════════════════════════
 function loadLocations(){
   try{
-    const s=localStorage.getItem('pantry_locations');
+    const s=localStorage.getItem(PANTRY_LOCATIONS_KEY);
     return s?JSON.parse(s):[];
   }catch(e){
     console.error('加载库存地点失败',e);
@@ -1042,7 +1134,8 @@ function loadLocations(){
 }
 function saveLocations(locations){
   try{
-    localStorage.setItem('pantry_locations',JSON.stringify(locations));
+    localStorage.setItem(PANTRY_LOCATIONS_KEY,JSON.stringify(locations));
+    queueCloudSync();
   }catch(e){
     if(e.name==='QuotaExceededError'){
       showError('存储空间不足，请清理浏览器缓存');
@@ -2263,16 +2356,13 @@ function extractFromText(text){
 
 // 验证 API 配置
 function verifyApiConfig(){
-  const apiKey=getApiKey();
   const config=OPENROUTER_CONFIG;
-  if(!apiKey)throw new Error('API Key 未配置，请检查 config.js');
-  if(!apiKey.startsWith('sk-or-v1-'))console.warn('⚠️ API Key 格式可能不正确，OpenRouter Key 通常以 sk-or-v1- 开头');
-  return {apiKey,config};
+  return {config};
 }
 
 // 单张照片识别
 async function recognizePhoto(imageFile){
-  const {apiKey}=verifyApiConfig();
+  verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
   const prompt=`请仔细识别这张图片中的商品信息，返回严格的 JSON 格式（不要包含任何其他文字）：
@@ -2306,10 +2396,7 @@ async function recognizePhoto(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:{
-        'Authorization':`Bearer ${apiKey}`,
-        'Content-Type':'application/json',
-        'HTTP-Referer':'https://pantry.local',
-        'X-Title':'Pantry'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({
         model:OPENROUTER_CONFIG.model,
@@ -2355,8 +2442,7 @@ async function recognizePhoto(imageFile){
 
 // 订单截图识别（批量）
 async function recognizeOrder(imageFile){
-  const apiKey=getApiKey();
-  if(!apiKey)throw new Error('请先配置 API Key');
+  verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
   const prompt=`请识别这张订单截图中的所有商品，返回 JSON 数组格式：
@@ -2384,10 +2470,7 @@ async function recognizeOrder(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:{
-        'Authorization':`Bearer ${apiKey}`,
-        'Content-Type':'application/json',
-        'HTTP-Referer':'https://pantry.local',
-        'X-Title':'Pantry'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({
         model:OPENROUTER_CONFIG.model,
@@ -2768,6 +2851,30 @@ document.getElementById('today-str').textContent=
 // 初始化Tab状态，确保FAB按钮正确显示
 switchTab(0);
 updateAlert();
+
+// 云端初始化（v1：浏览器级家庭）
+ensureFamily().then(data=>{
+  const serverData=data?.data||{items:[],locations:[]};
+  const localPayload=getCurrentPayload();
+  const serverItems=Array.isArray(serverData.items)?serverData.items:[];
+  const localHasData=Array.isArray(localPayload.items)&&localPayload.items.length>0;
+  const serverHasData=serverItems.length>0;
+  setFamilyMeta(data.familyId,data.version||1);
+  if(serverHasData){
+    applyCloudData(serverData);
+  }else if(localHasData){
+    // 若服务端为空但本地已有数据，首次上云
+    pushCloudNow().catch(e=>console.error('首次上云失败',e));
+  }else{
+    applyCloudData(serverData);
+  }
+  cloudReady=true;
+  if(activeTab===0)renderDashboard();else renderGallery();
+  updateAlert();
+}).catch(e=>{
+  console.error('云端初始化失败，回退本地模式',e);
+  cloudReady=false;
+});
 
 setTimeout(()=>{
   const key='pantry_deduct_v4';

@@ -2,7 +2,36 @@
 
 这是一个**纯前端（单 HTML）**的小应用，用来记录家庭日用品的库存与使用区余量，并支持**拍照识别/订单截图识别**快速录入（当前通过 OpenRouter 多模态模型）。
 
-> 本仓库同时存在 `pantry.html` 与 `pantry-v4_1.html` 两个主页面文件。通常以 **`pantry.html` 为最新**（文件时间更新更近，且包含近期 iPhone Safari 的保质期输入兼容修复）。
+> 本仓库同时存在 `pantry.html` 与 `pantry-v4_1.html` 两个主页面文件。通常以 **`pantry.html` 为最新**（文件时间更新更近，且包含近期 iPhone Safari 的保质期输入兼容修复）。`pantry-v4_1.html`文件可以废弃。
+
+---
+
+## 后端化方案入口（新增）
+
+- 已新增完整方案文档：`后端化产品技术方案.md`
+- 文档内容覆盖：
+  - 完全不登录（匿名 `clientId`）的产品路径
+  - v1（浏览器级家庭）与 v2（多设备/多人共享，全员可编辑）演进方案
+  - 后端 API 设计、数据表设计、同步冲突策略、AI 限流与成本控制
+  - 里程碑与验收标准（便于后续 coding agent 直接接手）
+
+---
+
+## 后端化实现状态（当前）
+
+- 主入口：`pantry.html`
+- 已新增后端目录：`api/`
+  - `api/families/ensure.js`
+  - `api/families/[familyId].js`
+  - `api/families/[familyId]/join-token.js`
+  - `api/families/join.js`
+  - `api/openrouter.js`
+- 已新增 Supabase SQL：`supabase/schema.sql`
+- 前端（`pantry.html`）已接入 v1 云同步：
+  - 浏览器首次打开自动创建/绑定匿名 `clientId`
+  - 自动关联一个 `family`
+  - 本地保存后防抖同步到云端
+  - 版本冲突时自动拉取最新数据并提示
 
 ---
 
@@ -70,6 +99,20 @@ python3 -m http.server 8000
 应用内“设置”页提供 Key 配置入口，Key 会存到浏览器本机的 `localStorage`（key 名：`pantry_openrouter_key`）。
 
 > 说明：当前实现是**前端直连 OpenRouter**，因此 key 会存在本地浏览器。若要线上化，需要改为后端代理（Vercel/Serverless）以避免 key 暴露。
+
+> 更新：`pantry.html` 已接入后端代理 `api/openrouter.js`（推荐线上使用后端环境变量 `OPENROUTER_API_KEY`）。设置页中的本地 Key 配置可作为临时/兼容入口，后续可下线。
+
+---
+
+## Vercel 环境变量（后端）
+
+请在 Vercel 项目中配置：
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENROUTER_API_KEY`
+
+> 注意：`SUPABASE_SERVICE_ROLE_KEY` 与 `OPENROUTER_API_KEY` 只能用于后端，不可暴露到前端。
 
 ---
 
