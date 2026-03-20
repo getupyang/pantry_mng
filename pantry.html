@@ -137,6 +137,22 @@ input,textarea,.finput,.rate-inp{
 .dl-dot.a{background:var(--amber);}
 .dl-dot.r{background:var(--red);}
 
+/* dashboard / gallery empty state */
+.dash-empty{margin-top:4px;padding:16px 4px 8px;text-align:center;}
+.dash-empty-illus{font-size:42px;line-height:1;margin-bottom:10px;opacity:.88;}
+.dash-empty-title{font-family:'Noto Serif SC',serif;font-size:var(--f-xl);font-weight:400;color:var(--text);margin-bottom:8px;}
+.dash-empty-sub{font-size:var(--f-sm);color:var(--muted);line-height:1.55;margin-bottom:16px;padding:0 6px;}
+.dash-empty-methods{text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 6px var(--shadow);}
+.dash-empty-row{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s;}
+.dash-empty-row:last-child{border-bottom:none;}
+.dash-empty-row:active{background:var(--surface2);}
+.dash-empty-ico{font-size:22px;line-height:1;flex-shrink:0;width:38px;text-align:center;padding-top:1px;}
+.dash-empty-row-t{font-size:var(--f-base);font-weight:500;color:var(--text);margin-bottom:3px;}
+.dash-empty-row-d{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);line-height:1.45;letter-spacing:.02em;}
+.dash-empty-cta{width:100%;padding:13px;background:var(--text);color:#fff;border:none;border-radius:10px;font-size:var(--f-md);cursor:pointer;letter-spacing:.05em;}
+.dash-empty-hint{font-size:var(--f-xs);color:var(--muted);margin-top:12px;line-height:1.55;padding:0 4px;}
+.gal-empty{padding:8px 0 72px;}
+
 /* ════════════════════════════
    GALLERY TAB
 ════════════════════════════ */
@@ -1512,6 +1528,48 @@ function switchTab(idx){
 // ═══════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════
+function htmlEmptyIntakeBlock(variant){
+  const isGal=variant==='gallery';
+  const title=isGal?'物品库还是空的':'家里还没有物品';
+  const sub=isGal?'添加第一件后，会按分类展示在这里。':'记下正在用的日用品，补货、临期会在首页提醒你。';
+  const wrapCls=isGal?'dash-empty gal-empty':'dash-empty';
+  return `<div class="${wrapCls}">
+    <div class="dash-empty-illus" aria-hidden="true">🏠</div>
+    <div class="dash-empty-title">${title}</div>
+    <div class="dash-empty-sub">${sub}</div>
+    <div class="dash-empty-methods">
+      <div class="dash-empty-row" onclick="openEmptyIntake('photo')">
+        <div class="dash-empty-ico" aria-hidden="true">📷</div>
+        <div>
+          <div class="dash-empty-row-t">拍照识别</div>
+          <div class="dash-empty-row-d">拍包装正面，自动识别品名、规格与保质期（推荐）</div>
+        </div>
+      </div>
+      <div class="dash-empty-row" onclick="openEmptyIntake('order')">
+        <div class="dash-empty-ico" aria-hidden="true">🧾</div>
+        <div>
+          <div class="dash-empty-row-t">订单截图</div>
+          <div class="dash-empty-row-d">淘宝 / 京东等订单图，可一次导入多件</div>
+        </div>
+      </div>
+      <div class="dash-empty-row" onclick="openEmptyIntake('manual')">
+        <div class="dash-empty-ico" aria-hidden="true">✏️</div>
+        <div>
+          <div class="dash-empty-row-t">手动填写</div>
+          <div class="dash-empty-row-d">逐项输入品名、容量、数量与保质期</div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="dash-empty-cta" onclick="nav('scr-add')">去录入第一件</button>
+    <div class="dash-empty-hint">也可随时点右下角 <b>＋</b> 添加。存放地点可在 <b>设置 → 地点管理</b> 里补充，不填也能先记物品。</div>
+  </div>`;
+}
+
+function openEmptyIntake(kind){
+  window._emptyIntakeKind=kind;
+  nav('scr-add');
+}
+
 function renderDashboard(){
   const lows=items.filter(i=>getStatus(i).isLow);
   const exps=items.filter(i=>getStatus(i).exp==='urgent');
@@ -1533,6 +1591,12 @@ function renderDashboard(){
       <div class="dash-sum-label">保质期预警</div>
     </div>
   </div>`;
+
+  if(items.length===0){
+    h+=htmlEmptyIntakeBlock('dashboard');
+    document.getElementById('dash-body').innerHTML=h;
+    return;
+  }
 
   if(urgentItems.length){
     h+=`<div class="dash-sec-title">⚑ 需要处理</div>`;
@@ -1582,6 +1646,10 @@ function renderDashboard(){
 //  GALLERY
 // ═══════════════════════════════════════════════
 function renderGallery(){
+  if(items.length===0){
+    document.getElementById('gallery-body').innerHTML=htmlEmptyIntakeBlock('gallery');
+    return;
+  }
   const cats={};
   items.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
   let h='';
@@ -2775,6 +2843,18 @@ function nav(id){
   if(id==='scr-add'){
     initLocationSelects();
     ensureExpiryInputsVisible();
+    const ik=window._emptyIntakeKind;
+    if(ik){
+      window._emptyIntakeKind=null;
+      if(ik==='manual'){
+        const rf=document.getElementById('recog-result');
+        const mf=document.getElementById('manual-form');
+        if(rf)rf.style.display='none';
+        if(mf)mf.style.display='block';
+      }else if(ik==='photo'||ik==='order'){
+        setTimeout(()=>doScan(ik),280);
+      }
+    }
   }
   // 如果切换到主页，自动刷新页面内容
   if(id==='scr-home'){
