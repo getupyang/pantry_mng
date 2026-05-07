@@ -322,6 +322,28 @@ input,textarea,.finput,.rate-inp{
 .add-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:var(--f-xl);flex-shrink:0;}
 .add-method h3{font-size:var(--f-md);font-weight:500;margin-bottom:2px;}
 .add-method p{font-size:var(--f-base);color:var(--text2);line-height:1.45;}
+.photo-guide{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px;margin:12px 0 14px;box-shadow:0 1px 6px var(--shadow);}
+.photo-guide-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.photo-guide-title{font-size:var(--f-sm);font-family:'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);}
+.photo-guide-chip{font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.06em;color:var(--green);background:var(--green-l);border:1px solid var(--green-m);border-radius:99px;padding:2px 7px;}
+.guide-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;}
+.guide-card{min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;}
+.guide-card.bad{background:#f8f0ea;border-color:rgba(156,52,40,.14);}
+.guide-illo{height:54px;border-radius:7px;background:#fbf7ee;position:relative;overflow:hidden;margin-bottom:6px;border:1px solid rgba(204,192,172,.45);}
+.guide-bottle{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);width:28px;height:42px;border-radius:9px 9px 6px 6px;background:linear-gradient(#dcece5,#8fbba2);border:1px solid rgba(46,100,72,.22);}
+.guide-bottle::before{content:'';position:absolute;left:8px;right:8px;top:-6px;height:7px;border-radius:4px 4px 0 0;background:#8fbba2;border:1px solid rgba(46,100,72,.18);}
+.guide-label{position:absolute;left:5px;right:5px;top:15px;height:15px;border-radius:3px;background:#fffaf1;border:1px solid rgba(204,192,172,.7);font-size:8px;line-height:14px;color:var(--green);font-family:'DM Mono',monospace;}
+.guide-date{position:absolute;left:8px;right:8px;bottom:9px;height:16px;border-radius:3px;background:#fffaf1;border:1px dashed rgba(138,94,20,.45);font-size:8px;line-height:15px;color:var(--amber);font-family:'DM Mono',monospace;}
+.guide-blur{position:absolute;inset:8px;border-radius:7px;background:linear-gradient(135deg,#eee1d4,#d8c8b8);filter:blur(1.5px);opacity:.85;}
+.guide-x{position:absolute;right:7px;top:5px;width:18px;height:18px;border-radius:50%;background:var(--red-l);color:var(--red);font-size:12px;line-height:18px;font-family:'DM Mono',monospace;}
+.guide-title{font-size:var(--f-sm);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.guide-note{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.02em;line-height:1.35;margin-top:1px;}
+.review-consent{font-size:var(--f-base);color:var(--text2);line-height:1.65;}
+.review-consent-row{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);}
+.review-consent-row:last-child{border-bottom:none;}
+.review-consent-ico{width:24px;height:24px;border-radius:7px;background:var(--green-l);color:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:var(--f-sm);font-family:'DM Mono',monospace;}
+.review-consent-title{font-size:var(--f-base);color:var(--text);margin-bottom:1px;}
+.review-consent-desc{font-size:var(--f-sm);color:var(--muted);line-height:1.5;}
 .div-or{text-align:center;font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);margin:13px 0;position:relative;}
 .div-or::before,.div-or::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border);}
 .div-or::before{left:0;}.div-or::after{right:0;}
@@ -615,6 +637,35 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
     <div class="add-method" onclick="doScan('order')">
       <div class="add-icon" style="background:#fef8ea">🧾</div>
       <div><h3>订单截图</h3><p>淘宝 / 京东截图，批量导入并自动分类</p></div>
+    </div>
+    <div class="photo-guide">
+      <div class="photo-guide-hd">
+        <div class="photo-guide-title">拍照示例</div>
+        <div class="photo-guide-chip">内测识别</div>
+      </div>
+      <div class="guide-grid">
+        <div class="guide-card">
+          <div class="guide-illo">
+            <div class="guide-bottle"><div class="guide-label">NAME</div></div>
+          </div>
+          <div class="guide-title">正面标签</div>
+          <div class="guide-note">品名/规格</div>
+        </div>
+        <div class="guide-card">
+          <div class="guide-illo">
+            <div class="guide-bottle"><div class="guide-date">EXP 2028</div></div>
+          </div>
+          <div class="guide-title">保质期面</div>
+          <div class="guide-note">喷码/日期</div>
+        </div>
+        <div class="guide-card bad">
+          <div class="guide-illo">
+            <div class="guide-blur"></div><div class="guide-x">×</div>
+          </div>
+          <div class="guide-title">容易失败</div>
+          <div class="guide-note">模糊/太近</div>
+        </div>
+      </div>
     </div>
     <div class="div-or">或手动填写</div>
     <div class="form-card" id="recog-result" style="display:none">
@@ -2369,6 +2420,114 @@ window.asQty=function(d){
 //  ADD
 // ═══════════════════════════════════════════════
 let _scanTmr=null;
+const RECOGNITION_REVIEW_CONSENT_KEY='pantry_recognition_review_consent';
+let _currentRecognitionReviewId=null;
+let _currentRecognitionReviewType=null;
+let _currentRecognitionParsedResult=null;
+let _acceptedRecognitionItems=[];
+
+function hasRecognitionReviewConsent(){
+  return localStorage.getItem(RECOGNITION_REVIEW_CONSENT_KEY)==='yes';
+}
+
+function resetRecognitionReviewState(){
+  _currentRecognitionReviewId=null;
+  _currentRecognitionReviewType=null;
+  _currentRecognitionParsedResult=null;
+  _acceptedRecognitionItems=[];
+}
+
+function clearPendingRecognitionReview(){
+  if(_currentRecognitionReviewId&&_acceptedRecognitionItems.length===0){
+    const reviewId=_currentRecognitionReviewId;
+    updateRecognitionReview({outcome:'discarded'});
+    trackEvent('recognition_discard',{reqType:_currentRecognitionReviewType,reviewId});
+  }
+  resetRecognitionReviewState();
+}
+
+function ensureRecognitionReviewConsent(onReady){
+  if(hasRecognitionReviewConsent()){
+    onReady();
+    return;
+  }
+  const body=`<div class="review-consent">
+    <div class="review-consent-row">
+      <div class="review-consent-ico">1</div>
+      <div><div class="review-consent-title">保存这次压缩照片</div><div class="review-consent-desc">照片只用于内测识别复盘，后台可以看到商品包装和标签。</div></div>
+    </div>
+    <div class="review-consent-row">
+      <div class="review-consent-ico">2</div>
+      <div><div class="review-consent-title">记录模型输出和最终录入</div><div class="review-consent-desc">你修改后的品名、规格、保质期会一起保存，用来判断识别是否被采纳。</div></div>
+    </div>
+    <div class="review-consent-row">
+      <div class="review-consent-ico">3</div>
+      <div><div class="review-consent-title">只在内测阶段开启</div><div class="review-consent-desc">不同意时不会打开相机，可以继续手动填写。</div></div>
+    </div>
+  </div>`;
+  openSheet('识别样本授权','内测准确率复盘',body,'同意并继续',()=>{
+    localStorage.setItem(RECOGNITION_REVIEW_CONSENT_KEY,'yes');
+    trackEvent('recognition_review_consent',{granted:true});
+    closeSheet();
+    onReady();
+  });
+}
+
+function compareRecognitionValue(value){
+  if(value===null||value===undefined)return '';
+  if(typeof value==='number')return String(Number.isFinite(value)?value:'');
+  return String(value).trim();
+}
+
+function getRecognitionChangedFields(parsed,accepted){
+  if(!parsed||!accepted)return [];
+  const fields=['name','brand','packageSize','unit','qty','expiryDate'];
+  return fields.filter(field=>compareRecognitionValue(parsed[field])!==compareRecognitionValue(accepted[field]));
+}
+
+function getCurrentParsedRecognitionItem(source){
+  if(source==='order'&&Array.isArray(_currentRecognitionParsedResult)){
+    const idx=Number.isInteger(window._currentOrderIndex)?window._currentOrderIndex:0;
+    return _currentRecognitionParsedResult[idx]||null;
+  }
+  return _currentRecognitionParsedResult&&!Array.isArray(_currentRecognitionParsedResult)?_currentRecognitionParsedResult:null;
+}
+
+function updateRecognitionReview(payload){
+  if(!_currentRecognitionReviewId||!pantryFamilyId)return Promise.resolve();
+  const body={
+    reviewId:_currentRecognitionReviewId,
+    familyId:pantryFamilyId,
+    clientId:getOrCreateClientId(),
+    ...payload
+  };
+  return fetch('/api/recognition-review',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  }).catch(e=>console.debug('识别样本回传失败',e));
+}
+
+function recordRecognitionAccepted(accepted,source){
+  if(!_currentRecognitionReviewId||source==='manual')return;
+  const parsed=getCurrentParsedRecognitionItem(source);
+  const row={
+    ...accepted,
+    parsedIndex:source==='order'&&Number.isInteger(window._currentOrderIndex)?window._currentOrderIndex:0,
+    editedFields:getRecognitionChangedFields(parsed,accepted)
+  };
+  _acceptedRecognitionItems.push(row);
+  updateRecognitionReview({
+    acceptedData:{items:_acceptedRecognitionItems},
+    outcome:'accepted'
+  });
+  trackEvent('recognition_accept',{
+    reqType:_currentRecognitionReviewType||source,
+    reviewId:_currentRecognitionReviewId,
+    editedFieldCount:row.editedFields.length,
+    editedFields:row.editedFields
+  });
+}
 
 // 图片预处理：压缩和格式转换
 async function preprocessImage(file){
@@ -2641,6 +2800,7 @@ function getOpenRouterHeaders(reqType){
     'X-Recognition-Type':reqType
   };
   if(pantryFamilyId)headers['X-Family-Id']=pantryFamilyId;
+  if(hasRecognitionReviewConsent())headers['X-Review-Consent']='yes';
   return headers;
 }
 
@@ -2695,9 +2855,20 @@ async function recognizePhoto(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status} ${response.statusText}`);
     }
     const result=await response.json();
-    return parseRecognitionResult(result);
+    _currentRecognitionReviewId=result.pantryReviewId||null;
+    _currentRecognitionReviewType='photo';
+    const parsed=parseRecognitionResult(result);
+    _currentRecognitionParsedResult=parsed;
+    _acceptedRecognitionItems=[];
+    if(_currentRecognitionReviewId){
+      updateRecognitionReview({parsedResult:parsed,outcome:'recognized'});
+    }
+    return parsed;
   }catch(e){
     clearTimeout(timeoutId);
+    if(_currentRecognitionReviewId){
+      updateRecognitionReview({outcome:'error'});
+    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -2749,6 +2920,8 @@ async function recognizeOrder(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status}`);
     }
     const result=await response.json();
+    _currentRecognitionReviewId=result.pantryReviewId||null;
+    _currentRecognitionReviewType='order';
     let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
     if(jsonStr.startsWith('```')){
       const lines=jsonStr.split('\n');
@@ -2758,9 +2931,18 @@ async function recognizeOrder(imageFile){
     if(jsonMatch)jsonStr=jsonMatch[0];
     const parsedItems=JSON.parse(jsonStr);
     const list=Array.isArray(parsedItems)?parsedItems:[parsedItems];
-    return list.map(item=>postProcessRecognitionResult(item));
+    const parsedList=list.map(item=>postProcessRecognitionResult(item));
+    _currentRecognitionParsedResult=parsedList;
+    _acceptedRecognitionItems=[];
+    if(_currentRecognitionReviewId){
+      updateRecognitionReview({parsedResult:parsedList,outcome:'recognized'});
+    }
+    return parsedList;
   }catch(e){
     clearTimeout(timeoutId);
+    if(_currentRecognitionReviewId){
+      updateRecognitionReview({outcome:'error'});
+    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -2799,6 +2981,13 @@ function doScan(type){
     showError('云端初始化中，请稍后再试');
     return;
   }
+  if(!hasRecognitionReviewConsent()){
+    ensureRecognitionReviewConsent(()=>doScan(type));
+    return;
+  }
+  clearPendingRecognitionReview();
+  window._orderItems=null;
+  window._currentOrderIndex=undefined;
   createFileInput('image',async file=>{
     trackEvent('scan_start',{reqType:type,fileSize:file.size});
     const ov=document.getElementById('scan-ov');
@@ -2827,7 +3016,7 @@ function doScan(type){
         if(!hasUsableRecognitionResult(result)){
           throw new Error('识别结果为空，请重试或手动输入');
         }
-        trackEvent('scan_success',{reqType:type,missingFields:(result.missingFields||[]).length,hasName:!!result.name,hasExpiry:!!result.expiryDate});
+        trackEvent('scan_success',{reqType:type,reviewId:_currentRecognitionReviewId,missingFields:(result.missingFields||[]).length,hasName:!!result.name,hasExpiry:!!result.expiryDate});
         fillRecognitionResult(result);
       }else{
         clearInterval(_scanTmr);
@@ -2839,7 +3028,7 @@ function doScan(type){
           // 保存订单识别结果，用于后续逐个确认录入
           window._orderItems=result;
           window._currentOrderIndex=0;
-          trackEvent('scan_success',{reqType:type,count:result.length});
+          trackEvent('scan_success',{reqType:type,reviewId:_currentRecognitionReviewId,count:result.length});
           // 填充第一个商品到表单
           fillOrderRecognitionResult(result[0],result.length);
           return;
@@ -2883,6 +3072,8 @@ function fillRecognitionResult(result){
   }
   recogForm.style.display='block';
   manualForm.style.display='none';
+  const formHd=document.querySelector('#recog-result .form-hd-t');
+  if(formHd)formHd.textContent='AI 识别结果';
   fillFormFields(result);
   const hint=getRecognitionMissingHint(result);
   if(hint)showError(hint);
@@ -2985,7 +3176,21 @@ function confirmAdd(){
     openedDates:startsOpened?[today()]:[]
   };
   items.push(newItem);
-  trackEvent('item_add',{source:addSource,qty,startsOpened,cat:d.cat,hasExpiry:!!exp,hasLocation:!!location});
+  const acceptedRecognitionItem={
+    itemId:newItem.id,
+    source:addSource,
+    name:newItem.name,
+    brand:newItem.brand,
+    packageSize:newItem.packageSize,
+    unit:newItem.unit,
+    qty,
+    expiryDate:newItem.expiryDate,
+    location:newItem.location,
+    startsOpened,
+    cat:newItem.cat
+  };
+  if(!isManual)recordRecognitionAccepted(acceptedRecognitionItem,addSource);
+  trackEvent('item_add',{source:addSource,reviewId:_currentRecognitionReviewId,qty,startsOpened,cat:d.cat,hasExpiry:!!exp,hasLocation:!!location});
   save();
   
   // 检查是否是订单识别的批量录入
@@ -3012,6 +3217,7 @@ function confirmAdd(){
   document.querySelector('input[name="mf-open-state"][value="stock"]').checked=true;
   document.querySelector('input[name="fi-open-state"][value="stock"]').checked=true;
   _lastDetected=null;
+  resetRecognitionReviewState();
 }
 
 // ═══════════════════════════════════════════════
@@ -3046,6 +3252,9 @@ function runDeduction(){
 let _curScr='scr-home';
 function nav(id){
   if(id===_curScr)return;
+  if(_curScr==='scr-add'&&id!=='scr-add'){
+    clearPendingRecognitionReview();
+  }
   const c=document.getElementById(_curScr);
   const n=document.getElementById(id);
   if(!c||!n){

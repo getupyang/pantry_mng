@@ -34,13 +34,33 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 6px;vertical-align:top}
 th{font-size:12px;color:var(--muted);font-weight:500}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.section-head .section-title{margin-bottom:0}
+.mini-btn{padding:5px 9px;border-radius:7px;font-size:12px;background:var(--card);color:var(--text);border:1px solid var(--line)}
+.review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.review-card{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fffdf7}
+.review-img{width:150px;aspect-ratio:3/4;border-radius:8px;border:1px solid var(--line);background:#eee4d5;object-fit:cover}
+.review-empty-img{width:150px;aspect-ratio:3/4;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
+.review-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.tag{font-size:12px;border-radius:99px;padding:2px 7px;background:#eee4d5;color:var(--muted)}
+.tag.ok{background:#e4f0ea;color:var(--green)}
+.tag.bad{background:#f3dfd9;color:var(--red)}
+.tag.warn{background:#f3e5c9;color:var(--amber)}
+.review-models{font-size:12px;color:var(--muted);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.review-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.review-block{min-width:0}
+.review-label{font-size:12px;color:var(--muted);margin-bottom:3px}
+.review-json{max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:7px;font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+.review-text{grid-column:1/-1;margin-top:8px}
+.review-edits{font-size:12px;color:var(--muted);margin-top:7px}
 .muted{color:var(--muted)}
 .login{position:fixed;inset:0;background:rgba(36,31,25,.35);display:flex;align-items:center;justify-content:center;padding:20px}
 .login .card{width:min(420px,100%)}
 .login h2{font-size:18px;margin-bottom:10px}
 .login input{width:100%;margin:8px 0 10px}
 .error{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
-@media(max-width:860px){body{padding:14px}.top{display:block}.controls{margin-top:12px}.grid{grid-template-columns:repeat(2,1fr)}.panel{grid-template-columns:1fr}}
+@media(max-width:980px){.review-grid{grid-template-columns:1fr}.review-card{grid-template-columns:120px minmax(0,1fr)}.review-img,.review-empty-img{width:120px}}
+@media(max-width:860px){body{padding:14px}.top{display:block}.controls{margin-top:12px}.grid{grid-template-columns:repeat(2,1fr)}.panel{grid-template-columns:1fr}.review-card{grid-template-columns:1fr}.review-img,.review-empty-img{width:100%;max-height:260px}.review-cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -98,6 +118,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     </table>
   </div>
 
+  <div class="card" style="margin-bottom:14px">
+    <div class="section-head">
+      <div class="section-title">识别样本</div>
+      <button class="mini-btn" id="reviewRefresh">刷新识别样本</button>
+    </div>
+    <div class="muted" id="reviewMeta" style="font-size:13px;margin-bottom:10px">只展示用户同意保存的内测样本。</div>
+    <div class="review-grid" id="recognitionReviews"></div>
+  </div>
+
   <div class="card">
     <div class="section-title">最近事件</div>
     <table>
@@ -127,6 +156,24 @@ function fmtDate(value){
 }
 function shortId(value){
   return value?`${value.slice(0,8)}...`:'-';
+}
+function esc(value){
+  return String(value??'').replace(/[&<>"']/g,ch=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+function jsonText(value){
+  if(value===null||value===undefined)return '-';
+  return JSON.stringify(value,null,2);
+}
+function outcomeTag(row){
+  const map={
+    accepted:['已采纳','ok'],
+    discarded:['未采纳','warn'],
+    error:['错误','bad'],
+    recognized:['已识别','warn']
+  };
+  return map[row.outcome]||[row.outcome||'-',''];
 }
 function renderMetrics(summary){
   const items=[
@@ -217,6 +264,68 @@ function renderRecent(rows){
     </tr>
   `).join('');
 }
+function renderRecognitionReviews(rows){
+  $('reviewMeta').textContent=`最近 ${rows.length} 条已授权识别样本`;
+  if(!rows.length){
+    $('recognitionReviews').innerHTML='<div class="muted">暂无识别样本。用户下次拍照识别并同意授权后会出现在这里。</div>';
+    return;
+  }
+  $('recognitionReviews').innerHTML=rows.map(row=>{
+    const [outcomeText,outcomeCls]=outcomeTag(row);
+    const acceptedItems=Array.isArray(row.acceptedData?.items)?row.acceptedData.items:[];
+    const lastAccepted=acceptedItems[acceptedItems.length-1]||null;
+    const edits=lastAccepted?.editedFields?.length?lastAccepted.editedFields.join('、'):(acceptedItems.length?'无字段改动':'未采纳');
+    const image=row.imageDataUrl
+      ? `<img class="review-img" src="${esc(row.imageDataUrl)}" alt="识别样本">`
+      : '<div class="review-empty-img">无图片</div>';
+    return `<div class="review-card">
+      <div>${image}</div>
+      <div>
+        <div class="review-meta">
+          <span class="tag ${outcomeCls}">${outcomeText}</span>
+          <span class="tag">${row.reqType==='order'?'订单':'照片'}</span>
+          <span class="tag">${fmtDate(row.createdAt)}</span>
+        </div>
+        <div class="review-models">${esc((row.models||[]).join(' / ')||'-')}</div>
+        <div class="review-cols">
+          <div class="review-block">
+            <div class="review-label">解析结果</div>
+            <div class="review-json">${esc(jsonText(row.parsedResult))}</div>
+          </div>
+          <div class="review-block">
+            <div class="review-label">最终录入</div>
+            <div class="review-json">${esc(jsonText(row.acceptedData))}</div>
+          </div>
+          <div class="review-block review-text">
+            <div class="review-label">模型原文</div>
+            <div class="review-json">${esc(row.modelText||row.errorCode||'-')}</div>
+          </div>
+        </div>
+        <div class="review-edits">字段改动：${esc(edits)} · 家庭 <code>${shortId(row.familyId)}</code></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function loadRecognitionReviews(){
+  if(!token)return;
+  const resp=await fetch('/api/admin/recognition-reviews?limit=30',{
+    headers:{'X-Admin-Token':token}
+  });
+  if(resp.status===401){
+    localStorage.removeItem('pantry_admin_token');
+    token='';
+    $('login').style.display='flex';
+    $('loginError').textContent='口令不正确';
+    return;
+  }
+  const data=await resp.json().catch(()=>({}));
+  if(!resp.ok){
+    $('reviewMeta').textContent=data.error||`识别样本加载失败：${resp.status}`;
+    $('recognitionReviews').innerHTML='';
+    return;
+  }
+  renderRecognitionReviews(data.reviews||[]);
+}
 async function load(){
   if(!token){
     $('login').style.display='flex';
@@ -248,6 +357,7 @@ async function load(){
   renderList('countryCounts',data.countryCounts||[],'暂无地区数据');
   renderFamilies(data.families||[]);
   renderRecent(data.recentEvents||[]);
+  await loadRecognitionReviews();
 }
 $('loginBtn').onclick=()=>{
   token=$('token').value.trim();
@@ -256,6 +366,7 @@ $('loginBtn').onclick=()=>{
   load();
 };
 $('refresh').onclick=load;
+$('reviewRefresh').onclick=loadRecognitionReviews;
 $('logout').onclick=()=>{localStorage.removeItem('pantry_admin_token');token='';$('login').style.display='flex';};
 $('days').onchange=load;
 if(token)load();else $('login').style.display='flex';

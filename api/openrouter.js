@@ -46,6 +46,27 @@ function hasImage(value) {
   return false;
 }
 
+function findImageDataUrl(value) {
+  if (!value) return null;
+  if (typeof value === "string" && value.startsWith("data:image/")) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findImageDataUrl(item);
+      if (found) return found;
+    }
+  }
+  if (typeof value === "object") {
+    if (value.type === "image_url" && typeof value.image_url?.url === "string") {
+      return value.image_url.url.startsWith("data:image/") ? value.image_url.url : null;
+    }
+    for (const item of Object.values(value)) {
+      const found = findImageDataUrl(item);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function sanitizeVisionRequest(body) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   if (!messages.length) {
@@ -133,6 +154,26 @@ async function recordUsage({ familyId, clientId, ipHash, reqType, models, status
   }
 }
 
+async function createRecognitionReview({ familyId, clientId, reqType, imageDataUrl, models, modelResponse, outcome, errorCode }) {
+  if (!imageDataUrl) return null;
+  const { resp, data } = await sbPost(
+    "pantry_recognition_reviews?select=id",
+    {
+      family_id: familyId,
+      client_id: clientId,
+      req_type: reqType,
+      image_data_url: imageDataUrl,
+      models,
+      model_response: modelResponse || null,
+      outcome,
+      error_code: errorCode || null,
+    },
+    { Prefer: "return=representation" }
+  );
+  if (!resp.ok || !Array.isArray(data) || !data[0]?.id) return null;
+  return data[0].id;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: { message: "Method Not Allowed" } });
@@ -147,6 +188,7 @@ export default async function handler(req, res) {
   const clientId = getHeader(req, "x-client-id");
   const familyId = getHeader(req, "x-family-id");
   const reqType = getHeader(req, "x-recognition-type") === "order" ? "order" : "photo";
+  const reviewConsent = getHeader(req, "x-review-consent") === "yes";
   const ipHash = getIpHash(req);
   if (!isValidClientId(clientId) || !isUuid(familyId)) {
     res.status(401).json({ error: { message: "Invalid client identity" } });
@@ -173,6 +215,7 @@ export default async function handler(req, res) {
       res.status(400).json({ error: { message: sanitized.error } });
       return;
     }
+    const imageDataUrl = reviewConsent ? findImageDataUrl(sanitized.body.messages) : null;
 
     const rate = await checkRateLimit({ clientId, familyId, ipHash });
     if (!rate.ok) {
@@ -206,6 +249,16 @@ export default async function handler(req, res) {
         errorCode: data?.error?.code || data?.error?.message || `upstream_${upstream.status}`,
         upstreamStatus: upstream.status,
       });
+      await createRecognitionReview({
+        familyId,
+        clientId,
+        reqType,
+        imageDataUrl,
+        models: sanitized.models,
+        modelResponse: data,
+        outcome: "error",
+        errorCode: data?.error?.code || data?.error?.message || `upstream_${upstream.status}`,
+      });
       res
         .status(upstream.status)
         .json(
@@ -225,6 +278,16 @@ export default async function handler(req, res) {
       upstreamStatus: upstream.status,
       cost: data?.usage?.cost || null,
     });
+    const reviewId = await createRecognitionReview({
+      familyId,
+      clientId,
+      reqType,
+      imageDataUrl,
+      models: sanitized.models,
+      modelResponse: data,
+      outcome: "recognized",
+    });
+    if (reviewId) data.pantryReviewId = reviewId;
     res.status(200).json(data);
   } catch (e) {
     res

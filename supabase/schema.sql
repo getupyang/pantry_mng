@@ -63,6 +63,22 @@ create table if not exists public.pantry_family_backups (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.pantry_recognition_reviews (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid references public.pantry_families(id) on delete cascade,
+  client_id text,
+  req_type text not null check (req_type in ('photo', 'order')),
+  image_data_url text,
+  models text[] not null default '{}',
+  model_response jsonb,
+  parsed_result jsonb,
+  accepted_data jsonb,
+  outcome text not null default 'recognized' check (outcome in ('recognized', 'accepted', 'discarded', 'error')),
+  error_code text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_pantry_clients_family_id on public.pantry_clients(family_id);
 create index if not exists idx_pantry_join_tokens_family_id on public.pantry_join_tokens(family_id);
 create index if not exists idx_pantry_join_tokens_active on public.pantry_join_tokens(revoked_at, expires_at);
@@ -73,6 +89,8 @@ create index if not exists idx_pantry_usage_events_client_id on public.pantry_us
 create index if not exists idx_pantry_usage_events_event_name on public.pantry_usage_events(event_name);
 create index if not exists idx_pantry_usage_events_ip_hash on public.pantry_usage_events(ip_hash, created_at);
 create index if not exists idx_pantry_family_backups_family_id on public.pantry_family_backups(family_id, created_at desc);
+create index if not exists idx_pantry_recognition_reviews_family_id on public.pantry_recognition_reviews(family_id, created_at desc);
+create index if not exists idx_pantry_recognition_reviews_created_at on public.pantry_recognition_reviews(created_at desc);
 
 create or replace function public.pantry_set_updated_at()
 returns trigger as $$
