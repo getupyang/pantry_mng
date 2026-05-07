@@ -1,4 +1,4 @@
-import { ensureEnv, sbGet, sbPatch, isValidClientId } from "../_supabase.js";
+import { ensureEnv, sbGet, sbPost, sbPatch, isValidClientId } from "../_supabase.js";
 
 function parseFamilyId(req) {
   const raw = req.query.familyId;
@@ -77,6 +77,18 @@ export default async function handler(req, res) {
       }
 
       const nextVersion = baseVersion + 1;
+      const { resp: backupResp, data: backupData } = await sbPost("pantry_family_backups", {
+        family_id: familyId,
+        version: current.version,
+        data_json: current.data_json || { items: [], locations: [] },
+        reason: "before_update",
+        created_by_client_id: clientId,
+      });
+      if (!backupResp.ok) {
+        res.status(500).json({ error: "Failed to create backup", detail: backupData });
+        return;
+      }
+
       const { resp: updateResp, data: updateRows } = await sbPatch(
         `pantry_families?id=eq.${familyId}&version=eq.${baseVersion}&select=id,version,updated_at`,
         { data_json: data, version: nextVersion },
@@ -100,4 +112,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: e?.message || "Unknown error" });
   }
 }
-

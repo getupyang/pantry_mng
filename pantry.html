@@ -2634,6 +2634,16 @@ function buildVisionRequest(prompt,base64Url,maxTokens){
   return body;
 }
 
+function getOpenRouterHeaders(reqType){
+  const headers={
+    'Content-Type':'application/json',
+    'X-Client-Id':getOrCreateClientId(),
+    'X-Recognition-Type':reqType
+  };
+  if(pantryFamilyId)headers['X-Family-Id']=pantryFamilyId;
+  return headers;
+}
+
 // 单张照片识别
 async function recognizePhoto(imageFile){
   verifyApiConfig();
@@ -2674,9 +2684,7 @@ async function recognizePhoto(imageFile){
   try{
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json'
-      },
+      headers:getOpenRouterHeaders('photo'),
       body:JSON.stringify(buildVisionRequest(prompt,base64Url,700)),
       signal:controller.signal
     });
@@ -2731,9 +2739,7 @@ async function recognizeOrder(imageFile){
   try{
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json'
-      },
+      headers:getOpenRouterHeaders('order'),
       body:JSON.stringify(buildVisionRequest(prompt,base64Url,2000)),
       signal:controller.signal
     });
@@ -2789,6 +2795,10 @@ function createFileInput(type,callback){
 }
 
 function doScan(type){
+  if(!cloudReady||!pantryFamilyId){
+    showError('云端初始化中，请稍后再试');
+    return;
+  }
   createFileInput('image',async file=>{
     trackEvent('scan_start',{reqType:type,fileSize:file.size});
     const ov=document.getElementById('scan-ov');

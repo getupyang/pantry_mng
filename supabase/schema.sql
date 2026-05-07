@@ -42,10 +42,24 @@ create table if not exists public.pantry_usage_events (
   family_id uuid,
   client_id text,
   event_name text not null,
+  ip_hash text,
   page_path text,
   properties jsonb not null default '{}'::jsonb,
   user_agent text,
   country text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.pantry_usage_events
+  add column if not exists ip_hash text;
+
+create table if not exists public.pantry_family_backups (
+  id bigserial primary key,
+  family_id uuid not null references public.pantry_families(id) on delete cascade,
+  version integer not null,
+  data_json jsonb not null,
+  reason text not null default 'before_update',
+  created_by_client_id text,
   created_at timestamptz not null default now()
 );
 
@@ -57,6 +71,8 @@ create index if not exists idx_pantry_usage_events_created_at on public.pantry_u
 create index if not exists idx_pantry_usage_events_family_id on public.pantry_usage_events(family_id);
 create index if not exists idx_pantry_usage_events_client_id on public.pantry_usage_events(client_id);
 create index if not exists idx_pantry_usage_events_event_name on public.pantry_usage_events(event_name);
+create index if not exists idx_pantry_usage_events_ip_hash on public.pantry_usage_events(ip_hash, created_at);
+create index if not exists idx_pantry_family_backups_family_id on public.pantry_family_backups(family_id, created_at desc);
 
 create or replace function public.pantry_set_updated_at()
 returns trigger as $$

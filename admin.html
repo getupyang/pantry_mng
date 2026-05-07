@@ -78,7 +78,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     <div class="card">
       <div class="section-title">家庭概览</div>
       <table>
-        <thead><tr><th>家庭</th><th>物品</th><th>开封</th><th>库存</th><th>客户端</th><th>更新时间</th></tr></thead>
+        <thead><tr><th>家庭</th><th>物品</th><th>开封</th><th>库存</th><th>客户端</th><th>更新时间</th><th>操作</th></tr></thead>
         <tbody id="families"></tbody>
       </table>
     </div>
@@ -87,6 +87,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
       <div class="list" id="recognitionCounts" style="margin-bottom:14px"></div>
       <div class="list" id="countryCounts"></div>
     </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="section-title">备份恢复</div>
+    <div class="muted" id="backupMeta">在家庭概览里选择一个家庭查看备份。</div>
+    <table style="margin-top:8px">
+      <thead><tr><th>备份</th><th>原因</th><th>物品</th><th>开封</th><th>库存</th><th>时间</th><th>操作</th></tr></thead>
+      <tbody id="backups"></tbody>
+    </table>
   </div>
 
   <div class="card">
@@ -153,8 +162,50 @@ function renderFamilies(rows){
       <td>${row.stockCount}</td>
       <td>${row.clientCount}</td>
       <td>${fmtDate(row.updatedAt)}</td>
+      <td><button onclick="loadBackups('${row.id}')">备份</button></td>
     </tr>
   `).join('');
+}
+async function loadBackups(familyId){
+  const resp=await fetch(`/api/admin/backups?familyId=${encodeURIComponent(familyId)}`,{
+    headers:{'X-Admin-Token':token}
+  });
+  const data=await resp.json().catch(()=>({}));
+  if(!resp.ok){
+    $('backupMeta').textContent=data.error||`备份加载失败：${resp.status}`;
+    return;
+  }
+  const fam=data.family;
+  $('backupMeta').innerHTML=fam
+    ? `当前家庭 <code>${familyId}</code> · 版本 ${fam.version} · 物品 ${fam.itemCount} · 库存 ${fam.stockCount}`
+    : `当前家庭 <code>${familyId}</code>`;
+  $('backups').innerHTML=(data.backups||[]).map(row=>`
+    <tr>
+      <td>#${row.id} / v${row.version}</td>
+      <td>${row.reason}</td>
+      <td>${row.itemCount}</td>
+      <td>${row.openCount}</td>
+      <td>${row.stockCount}</td>
+      <td>${fmtDate(row.createdAt)}</td>
+      <td><button onclick="restoreBackup('${familyId}',${row.id})">恢复</button></td>
+    </tr>
+  `).join('')||'<tr><td colspan="7" class="muted">暂无备份</td></tr>';
+}
+async function restoreBackup(familyId,backupId){
+  if(!confirm(`确定要把家庭 ${familyId.slice(0,8)} 恢复到备份 #${backupId} 吗？当前版本会先自动做安全备份。`))return;
+  const resp=await fetch('/api/admin/backups',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Admin-Token':token},
+    body:JSON.stringify({familyId,backupId})
+  });
+  const data=await resp.json().catch(()=>({}));
+  if(!resp.ok){
+    alert(data.error||`恢复失败：${resp.status}`);
+    return;
+  }
+  alert(`已恢复到版本 ${data.version}`);
+  await load();
+  await loadBackups(familyId);
 }
 function renderRecent(rows){
   $('recentEvents').innerHTML=(rows||[]).map(row=>`
