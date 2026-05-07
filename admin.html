@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pantry 使用看板</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f4efe6;--card:#fffaf1;--line:#dfd3bf;--text:#241f19;--muted:#877767;--green:#2f6b4b;--red:#a13d31;--amber:#9a6815}
+body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans SC","PingFang SC",sans-serif;background:var(--bg);color:var(--text);padding:22px}
+.wrap{max-width:1180px;margin:0 auto}
+.top{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+h1{font-size:24px;font-weight:650;letter-spacing:.02em}
+.sub{font-size:13px;color:var(--muted);margin-top:5px}
+.controls{display:flex;gap:8px;align-items:center}
+select,input,button{font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);padding:8px 10px}
+button{background:var(--text);color:white;cursor:pointer;border-color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px;box-shadow:0 1px 8px rgba(60,42,20,.05)}
+.metric{min-height:88px}
+.metric .v{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums}
+.metric .k{font-size:12px;color:var(--muted);margin-top:6px}
+.panel{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;margin-bottom:14px}
+.section-title{font-size:14px;font-weight:650;margin-bottom:10px}
+.bars{display:flex;align-items:flex-end;gap:5px;height:150px;border-bottom:1px solid var(--line);padding-top:12px}
+.bar{flex:1;min-width:8px;background:var(--green);border-radius:4px 4px 0 0;position:relative}
+.bar.active{background:var(--amber)}
+.bar span{position:absolute;left:50%;bottom:-20px;transform:translateX(-50%);font-size:10px;color:var(--muted);white-space:nowrap}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13px}
+.row .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-variant-numeric:tabular-nums;background:#eee4d5;border-radius:99px;padding:2px 8px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 6px;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:500}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+.muted{color:var(--muted)}
+.login{position:fixed;inset:0;background:rgba(36,31,25,.35);display:flex;align-items:center;justify-content:center;padding:20px}
+.login .card{width:min(420px,100%)}
+.login h2{font-size:18px;margin-bottom:10px}
+.login input{width:100%;margin:8px 0 10px}
+.error{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
+@media(max-width:860px){body{padding:14px}.top{display:block}.controls{margin-top:12px}.grid{grid-template-columns:repeat(2,1fr)}.panel{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Pantry 使用看板</h1>
+      <div class="sub" id="meta">等待加载</div>
+    </div>
+    <div class="controls">
+      <select id="days">
+        <option value="7">近 7 天</option>
+        <option value="30" selected>近 30 天</option>
+        <option value="90">近 90 天</option>
+      </select>
+      <button id="refresh">刷新</button>
+      <button id="logout">退出</button>
+    </div>
+  </div>
+
+  <div class="grid" id="metrics"></div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="section-title">每日使用</div>
+      <div class="bars" id="dailyBars"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">关键事件</div>
+      <div class="list" id="eventCounts"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="section-title">家庭概览</div>
+      <table>
+        <thead><tr><th>家庭</th><th>物品</th><th>开封</th><th>库存</th><th>客户端</th><th>更新时间</th></tr></thead>
+        <tbody id="families"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="section-title">识别与地区</div>
+      <div class="list" id="recognitionCounts" style="margin-bottom:14px"></div>
+      <div class="list" id="countryCounts"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">最近事件</div>
+    <table>
+      <thead><tr><th>时间</th><th>事件</th><th>家庭</th><th>属性</th></tr></thead>
+      <tbody id="recentEvents"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="login" id="login">
+  <div class="card">
+    <h2>输入后台口令</h2>
+    <div class="muted">口令只保存在当前浏览器，用于访问你的 admin API。</div>
+    <input id="token" type="password" placeholder="PANTRY_ADMIN_TOKEN">
+    <button id="loginBtn" style="width:100%">进入看板</button>
+    <div class="error" id="loginError"></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let token=localStorage.getItem('pantry_admin_token')||'';
+
+function fmtDate(value){
+  if(!value)return '-';
+  return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function shortId(value){
+  return value?`${value.slice(0,8)}...`:'-';
+}
+function renderMetrics(summary){
+  const items=[
+    ['家庭数',summary.totalFamilies],
+    ['客户端',summary.totalClients],
+    ['7日活跃客户端',summary.activeClients7d],
+    ['区间活跃家庭',summary.activeFamiliesInRange],
+    ['区间事件数',summary.eventCount],
+    ['识别错误',summary.scanErrors],
+  ];
+  $('metrics').innerHTML=items.map(([k,v])=>`<div class="card metric"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+}
+function renderList(id,rows,empty='暂无数据'){
+  $(id).innerHTML=(rows&&rows.length?rows:[{name:empty,count:0}]).map(row=>`
+    <div class="row"><div class="name">${row.name}</div><div class="pill">${row.count}</div></div>
+  `).join('');
+}
+function renderDaily(rows){
+  const max=Math.max(1,...rows.map(row=>Math.max(row.events,row.activeClients)));
+  $('dailyBars').innerHTML=rows.map((row,idx)=>{
+    const h=Math.max(4,Math.round(row.events/max*130));
+    const active=Math.max(4,Math.round(row.activeClients/max*130));
+    const label=idx%Math.ceil(rows.length/8)===0?row.date.slice(5):'';
+    return `<div class="bar" title="${row.date} 事件 ${row.events}" style="height:${h}px"><span>${label}</span></div><div class="bar active" title="${row.date} 活跃 ${row.activeClients}" style="height:${active}px"></div>`;
+  }).join('');
+}
+function renderFamilies(rows){
+  $('families').innerHTML=(rows||[]).map(row=>`
+    <tr>
+      <td><code>${shortId(row.id)}</code></td>
+      <td>${row.itemCount}</td>
+      <td>${row.openCount}</td>
+      <td>${row.stockCount}</td>
+      <td>${row.clientCount}</td>
+      <td>${fmtDate(row.updatedAt)}</td>
+    </tr>
+  `).join('');
+}
+function renderRecent(rows){
+  $('recentEvents').innerHTML=(rows||[]).map(row=>`
+    <tr>
+      <td>${fmtDate(row.createdAt)}</td>
+      <td>${row.eventName}</td>
+      <td><code>${shortId(row.familyId)}</code></td>
+      <td><code>${JSON.stringify(row.properties||{})}</code></td>
+    </tr>
+  `).join('');
+}
+async function load(){
+  if(!token){
+    $('login').style.display='flex';
+    return;
+  }
+  const days=$('days').value;
+  const resp=await fetch(`/api/admin/usage?days=${encodeURIComponent(days)}`,{
+    headers:{'X-Admin-Token':token}
+  });
+  if(resp.status===401){
+    localStorage.removeItem('pantry_admin_token');
+    token='';
+    $('login').style.display='flex';
+    $('loginError').textContent='口令不正确';
+    return;
+  }
+  if(!resp.ok){
+    const data=await resp.json().catch(()=>({}));
+    $('meta').textContent=data.error||`加载失败：${resp.status}`;
+    return;
+  }
+  const data=await resp.json();
+  $('login').style.display='none';
+  $('meta').textContent=`生成时间 ${fmtDate(data.generatedAt)} · 统计 ${data.days} 天`;
+  renderMetrics(data.summary||{});
+  renderDaily(data.daily||[]);
+  renderList('eventCounts',data.eventCounts||[]);
+  renderList('recognitionCounts',data.recognitionCounts||[],'暂无识别记录');
+  renderList('countryCounts',data.countryCounts||[],'暂无地区数据');
+  renderFamilies(data.families||[]);
+  renderRecent(data.recentEvents||[]);
+}
+$('loginBtn').onclick=()=>{
+  token=$('token').value.trim();
+  localStorage.setItem('pantry_admin_token',token);
+  $('loginError').textContent='';
+  load();
+};
+$('refresh').onclick=load;
+$('logout').onclick=()=>{localStorage.removeItem('pantry_admin_token');token='';$('login').style.display='flex';};
+$('days').onchange=load;
+if(token)load();else $('login').style.display='flex';
+</script>
+</body>
+</html>

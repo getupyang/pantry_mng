@@ -1157,6 +1157,30 @@ function queueCloudSync(){
   },700);
 }
 
+function trackEvent(eventName,properties={}){
+  try{
+    const payload={
+      eventName,
+      clientId:getOrCreateClientId(),
+      familyId:pantryFamilyId||null,
+      pagePath:location.pathname,
+      properties:{
+        screen:typeof _curScr==='string'?_curScr:null,
+        tab:typeof activeTab==='number'?activeTab:null,
+        ...properties
+      }
+    };
+    const body=JSON.stringify(payload);
+    if(navigator.sendBeacon){
+      navigator.sendBeacon('/api/usage-event',new Blob([body],{type:'application/json'}));
+    }else{
+      fetch('/api/usage-event',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});
+    }
+  }catch(e){
+    console.debug('埋点失败',e);
+  }
+}
+
 // ═══════════════════════════════════════════════
 //  LOCATION MANAGEMENT
 // ═══════════════════════════════════════════════
@@ -2077,6 +2101,7 @@ window.openTake=function(itemId){
     </div>`;
   openSheet(`${alreadyOpened?'取出库存':'开封使用'} · ${item.name}`,`库存 ${item.stockCount} 件`,body,alreadyOpened?'取出':'开封使用',()=>{
     const n=parseInt(document.getElementById('tk-n').textContent);
+    const wasFirstOpen=!hasOpenItems(item);
     item.stockCount-=n;
     // 确保openItems数组存在
     if(!item.openItems||!Array.isArray(item.openItems))item.openItems=[];
@@ -2089,6 +2114,7 @@ window.openTake=function(itemId){
     item.openCount=item.openItems.length;
     if(!item.openedDate)item.openedDate=today();
     addLog(item,'开封',`从库存取出 ×${n}`,0);
+    trackEvent('item_open',{count:n,firstOpen:wasFirstOpen,stockAfter:item.stockCount,openCount:item.openCount,cat:item.cat});
     save();closeSheet();openDetail(itemId);
   });
 };
@@ -2125,6 +2151,7 @@ window.openPutBack=function(itemId){
       item.openedDate=(item.openedDates||[]).find(Boolean)||null;
       selectedOpenIndex[itemId]=Math.max(0,Math.min(idx,item.openItems.length-1));
       addLog(item,'撤销','放回未开封库存',0);
+      trackEvent('item_put_back',{stockAfter:item.stockCount,openCount:item.openCount,cat:item.cat});
       save();closeSheet();openDetail(itemId);
     });
 };
@@ -2147,6 +2174,7 @@ window.openRemoveCurrent=function(itemId){
       item.openedDate=(item.openedDates||[]).find(Boolean)||null;
       selectedOpenIndex[itemId]=Math.max(0,Math.min(idx,item.openItems.length-1));
       addLog(item,'移除',isEmpty?'移除空件':`移除使用中这件`,isEmpty?0:-remain);
+      trackEvent('item_remove_open',{empty:isEmpty,remaining:remain,openCount:item.openCount,cat:item.cat});
       save();closeSheet();openDetail(itemId);
     },!isEmpty);
 };
@@ -2168,6 +2196,7 @@ window.openPour=function(itemId){
   openSheet(`倒入补充装 · ${item.name}`,`${supp.name} ×${supp.stockCount}`,body,'确认倒入',()=>{
     item.activePercent=newPct;item.supplement.stockCount-=1;
     addLog(item,'补充',`倒入补充装 +${amt}${item.unit}`,amt);
+    trackEvent('supplement_pour',{amount:amt,stockAfter:item.supplement.stockCount,cat:item.cat});
     save();closeSheet();openDetail(itemId);
   });
 };
@@ -2187,6 +2216,7 @@ window.openRetire=function(itemId){
       item.openedDate=(item.openedDates||[]).find(Boolean)||null;
       if(selectedOpenIndex[itemId]>=item.openCount)selectedOpenIndex[itemId]=Math.max(0,item.openCount-1);
       addLog(item,'移除','移除空件',0);
+      trackEvent('item_remove_open',{empty:true,openCount:item.openCount,cat:item.cat});
       save();closeSheet();openDetail(itemId);
     },true);
 };
@@ -2251,6 +2281,7 @@ function executeDelete(itemId){
   if(_deletedIndex===-1)return;
   _deletedItem=JSON.parse(JSON.stringify(items[_deletedIndex]));
   items.splice(_deletedIndex,1);
+  trackEvent('item_delete',{cat:_deletedItem.cat,openCount:_deletedItem.openCount||0,stockCount:_deletedItem.stockCount||0});
   save();
   // go back to home
   nav('scr-home');
@@ -2300,6 +2331,7 @@ window.undoDelete=function(){
   if(_deletedIndex>=0&&_deletedIndex<=items.length) items.splice(_deletedIndex,0,_deletedItem);
   else items.push(_deletedItem);
   _deletedItem=null;_deletedIndex=-1;
+  trackEvent('item_restore',{});
   save();
   hideUndoBar();
   if(activeTab===0)renderDashboard();else renderGallery();
@@ -2319,6 +2351,7 @@ window.openAddStock=function(itemId){
   openSheet(`补入库存 · ${item.name}`,'',body,'确认入库',()=>{
     const n=parseInt(document.getElementById('as-n').textContent);
     item.stockCount+=n;addLog(item,'入库',`补入 ×${n}件`,item.packageSize*n);
+    trackEvent('stock_add',{count:n,stockAfter:item.stockCount,cat:item.cat});
     save();closeSheet();openDetail(itemId);
   });
   window._asItemId=itemId;
@@ -2757,6 +2790,7 @@ function createFileInput(type,callback){
 
 function doScan(type){
   createFileInput('image',async file=>{
+    trackEvent('scan_start',{reqType:type,fileSize:file.size});
     const ov=document.getElementById('scan-ov');
     document.getElementById('scan-lbl').textContent=type==='photo'?'拍照识别中':'读取订单截图';
     ov.classList.add('show');
@@ -2783,6 +2817,7 @@ function doScan(type){
         if(!hasUsableRecognitionResult(result)){
           throw new Error('识别结果为空，请重试或手动输入');
         }
+        trackEvent('scan_success',{reqType:type,missingFields:(result.missingFields||[]).length,hasName:!!result.name,hasExpiry:!!result.expiryDate});
         fillRecognitionResult(result);
       }else{
         clearInterval(_scanTmr);
@@ -2794,6 +2829,7 @@ function doScan(type){
           // 保存订单识别结果，用于后续逐个确认录入
           window._orderItems=result;
           window._currentOrderIndex=0;
+          trackEvent('scan_success',{reqType:type,count:result.length});
           // 填充第一个商品到表单
           fillOrderRecognitionResult(result[0],result.length);
           return;
@@ -2814,6 +2850,7 @@ function doScan(type){
         else errorMsg=err.message;
       }
       showError(errorMsg);
+      trackEvent('scan_error',{reqType:type,message:errorMsg.slice(0,120)});
       document.getElementById('recog-result').style.display='none';
       document.getElementById('manual-form').style.display='block';
     }
@@ -2921,6 +2958,7 @@ function confirmAdd(){
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
+  const addSource=isManual?'manual':(window._orderItems?'order':'photo');
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
   const finalUnit=formUnit||d.unit;
@@ -2937,6 +2975,7 @@ function confirmAdd(){
     openedDates:startsOpened?[today()]:[]
   };
   items.push(newItem);
+  trackEvent('item_add',{source:addSource,qty,startsOpened,cat:d.cat,hasExpiry:!!exp,hasLocation:!!location});
   save();
   
   // 检查是否是订单识别的批量录入
@@ -3126,6 +3165,7 @@ ensureFamily().then(data=>{
   cloudReady=true;
   if(activeTab===0)renderDashboard();else renderGallery();
   updateAlert();
+  trackEvent('app_open',{itemCount:items.length,locationCount:loadLocations().length,serverHasData});
 }).catch(e=>{
   console.error('云端初始化失败，回退本地模式',e);
   cloudReady=false;

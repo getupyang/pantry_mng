@@ -37,10 +37,26 @@ create table if not exists public.pantry_recognition_usage (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.pantry_usage_events (
+  id bigserial primary key,
+  family_id uuid,
+  client_id text,
+  event_name text not null,
+  page_path text,
+  properties jsonb not null default '{}'::jsonb,
+  user_agent text,
+  country text,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_pantry_clients_family_id on public.pantry_clients(family_id);
 create index if not exists idx_pantry_join_tokens_family_id on public.pantry_join_tokens(family_id);
 create index if not exists idx_pantry_join_tokens_active on public.pantry_join_tokens(revoked_at, expires_at);
 create index if not exists idx_pantry_recognition_usage_created_at on public.pantry_recognition_usage(created_at);
+create index if not exists idx_pantry_usage_events_created_at on public.pantry_usage_events(created_at);
+create index if not exists idx_pantry_usage_events_family_id on public.pantry_usage_events(family_id);
+create index if not exists idx_pantry_usage_events_client_id on public.pantry_usage_events(client_id);
+create index if not exists idx_pantry_usage_events_event_name on public.pantry_usage_events(event_name);
 
 create or replace function public.pantry_set_updated_at()
 returns trigger as $$
@@ -64,4 +80,3 @@ begin
   end if;
 end
 $$;
-
