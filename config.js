@@ -16,6 +16,11 @@ function setApiKey(key) {
 // OpenRouter配置
 const OPENROUTER_CONFIG = {
   apiUrl: '/api/openrouter',
-  model: 'anthropic/claude-3.5-sonnet', // 多模态模型
-  timeout: 10000, // 10秒超时（图片识别需要更长时间）
+  model: 'google/gemini-2.5-flash',
+  models: [
+    'google/gemini-2.5-flash',
+    'qwen/qwen3-vl-32b-instruct',
+    'qwen/qwen-vl-plus'
+  ],
+  timeout: 30000, // 图片识别在移动网络下可能超过 10 秒
 };

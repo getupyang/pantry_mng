@@ -601,7 +601,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
   <div class="scroll"><div class="add-wrap">
     <div class="add-method" onclick="doScan('photo')">
       <div class="add-icon" style="background:#e8f5ee">📷</div>
-      <div><h3>拍照识别</h3><p>拍产品正面，自动识别品名、规格、保质期、分类</p></div>
+      <div><h3>拍照识别</h3><p>拍产品标签，缺少品名或保质期时会提示补拍</p></div>
     </div>
     <div class="add-method" onclick="doScan('order')">
       <div class="add-icon" style="background:#fef8ea">🧾</div>
@@ -616,7 +616,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div id="detected-cat-badge"></div>
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
-      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit">ml</span></div>
+      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit" id="fi-unit">ml</span></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
       <div class="frow unc"><div class="udot"></div><span class="flabel" style="color:var(--amber)">保质期至</span><input class="finput" id="fi-exp" value="2026-09-01" type="date"></div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="fi-location"><option value="">未填写</option></select></div>
@@ -2337,48 +2337,101 @@ async function imageToBase64(file){
 
 // 规范化保质期日期格式
 function normalizeExpiryDate(dateStr){
-  if(!dateStr||dateStr==='null'||dateStr.toLowerCase()==='null')return null;
-  if(/^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
-    const expiryDate=new Date(dateStr);
+  if(dateStr===null||dateStr===undefined)return null;
+  let raw=String(dateStr).trim();
+  if(!raw||raw==='null'||raw.toLowerCase()==='null')return null;
+  raw=raw.replace(/[。．]/g,'.').replace(/\s+/g,' ');
+
+  function toFullYear(year){
+    year=parseInt(year,10);
+    return year<100?2000+year:year;
+  }
+  function buildDate(year,month,day=1){
+    year=toFullYear(year);
+    month=parseInt(month,10);
+    day=parseInt(day,10);
+    if(!year||month<1||month>12||day<1||day>31)return null;
+    const date=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const parsed=new Date(`${date}T00:00:00`);
+    if(Number.isNaN(parsed.getTime())||parsed.getFullYear()!==year||parsed.getMonth()+1!==month||parsed.getDate()!==day)return null;
+    warnPastExpiry(date);
+    return date;
+  }
+  function warnPastExpiry(date){
+    const expiryDate=new Date(date);
     const today=new Date();today.setHours(0,0,0,0);
     if(expiryDate<today){
       const daysDiff=Math.round((today-expiryDate)/(1000*60*60*24));
-      console.warn('⚠️ 识别出的保质期是过去日期（已过期',daysDiff,'天），可能识别错误:',dateStr);
+      console.warn('⚠️ 识别出的保质期是过去日期（已过期',daysDiff,'天），可能识别错误:',date);
     }
-    return dateStr;
   }
-  const currentYear=new Date().getFullYear();
-  const currentYearShort=currentYear%100;
-  let match=dateStr.match(/(\d{2,4})年\s*(\d{1,2})月(?:\s*(\d{1,2})日?)?/);
-  if(match){
-    let year=parseInt(match[1]);
-    const month=parseInt(match[2]);
-    const day=match[3]?parseInt(match[3]):1;
-    if(year<100)year=2000+year;
-    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  }
-  match=dateStr.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if(match){
-    const year=parseInt(match[1]),month=parseInt(match[2]),day=parseInt(match[3]);
-    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  }
-  match=dateStr.match(/(\d{2,4})年\s*(\d{1,2})月\s*(\d{1,2})日?/);
-  if(match){
-    let year=parseInt(match[1]);
-    const month=parseInt(match[2]);
-    const day=match[3]?parseInt(match[3]):1;
-    if(year<100)year=2000+year;
-    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  }
-  match=dateStr.match(/(\d{2,4})[年-](\d{1,2})/);
-  if(match&&!dateStr.match(/\d{1,2}[日号]/)){
-    let year=parseInt(match[1]);
-    const month=parseInt(match[2]);
-    if(year<100)year=2000+year;
-    return `${year}-${String(month).padStart(2,'0')}-01`;
-  }
-  console.warn('无法解析保质期格式:',dateStr);
+
+  let match=raw.match(/(\d{2,4})年\s*(\d{1,2})月\s*(\d{1,2})日?/);
+  if(match)return buildDate(match[1],match[2],match[3]);
+
+  match=raw.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(match)return buildDate(match[1],match[2],match[3]);
+
+  // 年月格式没有具体日期时，按产品规则取当月第一天。
+  match=raw.match(/(\d{2,4})年\s*(\d{1,2})月/);
+  if(match)return buildDate(match[1],match[2],1);
+
+  match=raw.match(/(\d{4})[-\/.](\d{1,2})(?![-\/.]\d)/);
+  if(match)return buildDate(match[1],match[2],1);
+
+  // 常见喷码/包装格式：EXP 10/2028、10/2028、10-28。
+  match=raw.match(/(?:EXP|有效期至|限期使用日期|使用期限)?\D*(\d{1,2})[-\/.](\d{2,4})(?![-\/.]\d)/i);
+  if(match&&parseInt(match[1],10)<=12)return buildDate(match[2],match[1],1);
+
+  console.warn('无法解析保质期格式:',raw);
   return null;
+}
+
+function normalizeRecognitionUnit(unit){
+  if(unit===null||unit===undefined)return '';
+  const raw=String(unit).trim();
+  const map={毫升:'ml',毫升数:'ml',克:'g',个:'个',件:'件',片:'片',包:'包',瓶:'瓶',支:'支',盒:'盒',抽:'抽',卷:'卷'};
+  return map[raw]||raw.toLowerCase();
+}
+
+function postProcessRecognitionResult(result){
+  const parsed=result&&typeof result==='object'?result:{};
+  parsed.name=String(parsed.name||'').trim();
+  parsed.brand=String(parsed.brand||'').trim();
+  parsed.packageSize=parseFloat(parsed.packageSize)||0;
+  parsed.unit=normalizeRecognitionUnit(parsed.unit);
+  parsed.qty=Math.max(1,parseInt(parsed.qty,10)||1);
+
+  const evidenceDate=parsed.expiryEvidence?normalizeExpiryDate(parsed.expiryEvidence):null;
+  parsed.expiryDate=evidenceDate||normalizeExpiryDate(parsed.expiryDate);
+
+  const missing=new Set(Array.isArray(parsed.missingFields)?parsed.missingFields:[]);
+  if(!parsed.name)missing.add('name');
+  if(!parsed.brand)missing.add('brand');
+  if(!parsed.packageSize)missing.add('packageSize');
+  if(!parsed.unit)missing.add('unit');
+  if(!parsed.expiryDate)missing.add('expiryDate');
+  parsed.missingFields=[...missing];
+  return parsed;
+}
+
+function hasUsableRecognitionResult(result){
+  return Boolean(result&&(result.name||result.brand||result.packageSize>0||result.expiryDate));
+}
+
+function getRecognitionMissingHint(result){
+  if(!result)return '';
+  const missing=new Set(result.missingFields||[]);
+  if(result.expiryDate&&!result.name&&!result.packageSize){
+    return '只识别到保质期，请补拍正面或手动补全品名和规格';
+  }
+  if(missing.has('expiryDate')&&(result.name||result.packageSize)){
+    return '未识别到保质期，可继续录入或补拍保质期/底部';
+  }
+  if(missing.has('name')||missing.has('packageSize')){
+    return '部分字段缺失，请确认后再录入';
+  }
+  return '';
 }
 
 // 解析识别结果
@@ -2395,10 +2448,10 @@ function parseRecognitionResult(result){
     }
     const jsonMatch=jsonStr.match(/\{[\s\S]*\}/);
     if(jsonMatch)jsonStr=jsonMatch[0];
-    return JSON.parse(jsonStr);
+    return postProcessRecognitionResult(JSON.parse(jsonStr));
   }catch(e){
     console.error('解析识别结果失败',e);
-    return extractFromText(result.choices?.[0]?.message?.content||'');
+    return postProcessRecognitionResult(extractFromText(result.choices?.[0]?.message?.content||''));
   }
 }
 
@@ -2428,6 +2481,30 @@ function verifyApiConfig(){
   return {config};
 }
 
+function getVisionModels(){
+  const models=Array.isArray(OPENROUTER_CONFIG.models)?OPENROUTER_CONFIG.models.filter(Boolean):[];
+  if(models.length)return models;
+  return OPENROUTER_CONFIG.model?[OPENROUTER_CONFIG.model]:[];
+}
+
+function buildVisionRequest(prompt,base64Url,maxTokens){
+  const models=getVisionModels();
+  const body={
+    messages:[{
+      role:'user',
+      content:[
+        {type:'text',text:prompt},
+        {type:'image_url',image_url:{url:base64Url}}
+      ]
+    }],
+    temperature:0,
+    max_tokens:maxTokens
+  };
+  if(models.length>1)body.models=models;
+  else body.model=models[0];
+  return body;
+}
+
 // 单张照片识别
 async function recognizePhoto(imageFile){
   verifyApiConfig();
@@ -2441,7 +2518,9 @@ async function recognizePhoto(imageFile){
   "packageSize": 250,
   "unit": "ml",
   "qty": 1,
-  "expiryDate": "2026-12-31"
+  "expiryDate": "2026-12-31",
+  "expiryEvidence": "包装上的日期原文",
+  "missingFields": ["expiryDate"]
 }
 
 识别要求：
@@ -2455,8 +2534,11 @@ async function recognizePhoto(imageFile){
 重要：
 - 只返回 JSON 对象，不要包含 markdown 代码块标记（三个反引号加json等）
 - 不要添加任何解释文字
-- 日期格式必须严格遵循 YYYY-MM-DD
-- 如果某个字段无法识别，使用合理的默认值（name 和 brand 可以是空字符串，packageSize 可以是 0，qty 默认 1，expiryDate 可以是 null）`;
+- 日期格式必须严格遵循 YYYY-MM-DD。如果包装只写到月份，例如 EXP 10/2028 或 2028年8月，expiryDate 必须取当月第一天，如 2028-10-01、2028-08-01
+- 如果只看到保质期/底部/喷码，看不到品名、品牌、容量，不要猜测商品类型，name/brand 返回空字符串，packageSize 返回 0，并在 missingFields 中标记缺失字段
+- expiryEvidence 返回图片中看到的日期原文；如果没有看到日期，返回空字符串
+- missingFields 返回无法从图片中确认的字段名数组
+- 如果某个字段无法识别，使用空字符串、0 或 null，不要编造`;
   const controller=new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -2466,17 +2548,7 @@ async function recognizePhoto(imageFile){
       headers:{
         'Content-Type':'application/json'
       },
-      body:JSON.stringify({
-        model:OPENROUTER_CONFIG.model,
-        messages:[{
-          role:'user',
-          content:[
-            {type:'text',text:prompt},
-            {type:'image_url',image_url:{url:base64Url}}
-          ]
-        }],
-        max_tokens:500
-      }),
+      body:JSON.stringify(buildVisionRequest(prompt,base64Url,700)),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -2486,17 +2558,7 @@ async function recognizePhoto(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status} ${response.statusText}`);
     }
     const result=await response.json();
-    const parsed=parseRecognitionResult(result);
-    if(parsed.expiryDate){
-      const originalExpiry=parsed.expiryDate;
-      parsed.expiryDate=normalizeExpiryDate(parsed.expiryDate);
-      if(parsed.expiryDate===originalExpiry){
-        const expiryDate=new Date(parsed.expiryDate);
-        const today=new Date();today.setHours(0,0,0,0);
-        if(expiryDate<today)console.warn('⚠️⚠️⚠️ 重要提示：识别出的保质期是过去日期，请仔细检查图片中的年份是否正确！');
-      }
-    }
-    return parsed;
+    return parseRecognitionResult(result);
   }catch(e){
     clearTimeout(timeoutId);
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
@@ -2521,16 +2583,19 @@ async function recognizeOrder(imageFile){
     "packageSize": 250,
     "unit": "ml",
     "qty": 1,
-    "expiryDate": "2026-12-31"
+    "expiryDate": "2026-12-31",
+    "expiryEvidence": "包装上的日期原文",
+    "missingFields": ["expiryDate"]
   }
 ]
 
 要求：
 1. 识别所有商品，每个商品一个对象
 2. 字段说明同上（name/brand/packageSize/unit/qty/expiryDate）
-3. 如果某个字段无法识别，使用合理的默认值
+3. 如果某个字段无法识别，使用空字符串、0 或 null，并写入 missingFields，不要编造
 4. 如果图片中同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回
-5. 只返回 JSON 数组，不要其他文字`;
+5. 如果只看到月份，例如 EXP 10/2028，expiryDate 取当月第一天：2028-10-01
+6. 只返回 JSON 数组，不要其他文字`;
   const controller=new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout*2;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -2540,17 +2605,7 @@ async function recognizeOrder(imageFile){
       headers:{
         'Content-Type':'application/json'
       },
-      body:JSON.stringify({
-        model:OPENROUTER_CONFIG.model,
-        messages:[{
-          role:'user',
-          content:[
-            {type:'text',text:prompt},
-            {type:'image_url',image_url:{url:base64Url}}
-          ]
-        }],
-        max_tokens:2000
-      }),
+      body:JSON.stringify(buildVisionRequest(prompt,base64Url,2000)),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -2566,8 +2621,9 @@ async function recognizeOrder(imageFile){
     }
     const jsonMatch=jsonStr.match(/\[[\s\S]*\]/);
     if(jsonMatch)jsonStr=jsonMatch[0];
-    const items=JSON.parse(jsonStr);
-    return Array.isArray(items)?items:[items];
+    const parsedItems=JSON.parse(jsonStr);
+    const list=Array.isArray(parsedItems)?parsedItems:[parsedItems];
+    return list.map(item=>postProcessRecognitionResult(item));
   }catch(e){
     clearTimeout(timeoutId);
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
@@ -2628,7 +2684,7 @@ function doScan(type){
         clearInterval(_scanTmr);
         document.getElementById('scan-step').textContent='调用AI识别中…';
         result=await recognizePhoto(file);
-        if(!result||(typeof result==='object'&&Object.keys(result).length===0)){
+        if(!hasUsableRecognitionResult(result)){
           throw new Error('识别结果为空，请重试或手动输入');
         }
         fillRecognitionResult(result);
@@ -2685,6 +2741,8 @@ function fillRecognitionResult(result){
   recogForm.style.display='block';
   manualForm.style.display='none';
   fillFormFields(result);
+  const hint=getRecognitionMissingHint(result);
+  if(hint)showError(hint);
 }
 
 // 填充订单识别结果到表单（订单截图，可能多个商品）
@@ -2711,10 +2769,13 @@ function fillOrderRecognitionResult(item,totalCount){
     formHd.textContent='AI 识别结果';
   }
   fillFormFields(item);
+  const hint=getRecognitionMissingHint(item);
+  if(hint)showError(hint);
 }
 
 // 填充表单字段（通用函数）
 function fillFormFields(result){
+  const detectedFromName=result.name?detectItem(result.name):null;
   const nameEl=document.getElementById('fi-name');
   const brandEl=document.getElementById('fi-brand');
   const sizeEl=document.getElementById('fi-size');
@@ -2726,16 +2787,19 @@ function fillFormFields(result){
   }
   if(brandEl)brandEl.value=result.brand||'';
   if(sizeEl)sizeEl.value=result.packageSize||'';
-  if(result.unit){
-    const unitEl=document.getElementById('mf-unit');
-    if(unitEl)unitEl.textContent=result.unit;
-  }
+  const unitEl=document.getElementById('fi-unit');
+  if(unitEl)unitEl.textContent=result.unit||detectedFromName?.unit||'ml';
   if(qtyEl)qtyEl.value=result.qty||1;
   if(expEl)expEl.value=result.expiryDate||'';
+  const confEl=document.querySelector('#recog-result .form-conf');
+  if(confEl){
+    const missing=(result.missingFields||[]).filter(f=>['name','packageSize','expiryDate'].includes(f));
+    confEl.textContent=missing.length?'需补全':'已识别';
+  }
   const badgeEl=document.getElementById('detected-cat-badge');
   if(badgeEl){
     if(result.name){
-      const d=detectItem(result.name);
+      const d=detectedFromName;
       if(d)badgeEl.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${shapeName(d.shape)}</div>`;
       else badgeEl.innerHTML='';
     }else badgeEl.innerHTML='';
@@ -2753,15 +2817,19 @@ function confirmAdd(){
   const name=isManual?document.getElementById('mf-name').value:document.getElementById('fi-name').value;
   const brand=isManual?document.getElementById('mf-brand').value:document.getElementById('fi-brand').value;
   const size=parseInt(isManual?document.getElementById('mf-size').value:document.getElementById('fi-size').value)||250;
+  const recognizedUnit=document.getElementById('fi-unit')?.textContent||'';
+  const manualUnit=document.getElementById('mf-unit')?.textContent||'';
+  const formUnit=normalizeRecognitionUnit(isManual?manualUnit:recognizedUnit);
   const qty=parseInt(isManual?document.getElementById('mf-qty').value:document.getElementById('fi-qty').value)||1;
   const exp=isManual?document.getElementById('mf-exp').value:document.getElementById('fi-exp').value;
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
+  const finalUnit=formUnit||d.unit;
 
   const newItem={
     id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,
-    packageSize:size,unit:d.unit,activePercent:100,openCount:1,stockCount:Math.max(0,qty-1),
+    packageSize:size,unit:finalUnit,activePercent:100,openCount:1,stockCount:Math.max(0,qty-1),
     dailyUse:d.daily,color:d.color,shape:d.shape,
     expiryDate:exp||null,openedDate:today(),location:location||null,
     logs:[{type:'录入',desc:`购入×${qty}`,delta:size*qty,date:today()}],
