@@ -170,7 +170,7 @@ input,textarea,.finput,.rate-inp{
 .bdg.a{background:var(--amber);color:#fff;}
 .bdg.g{background:var(--surface3);color:var(--green);border:1px solid var(--green-m);}
 
-.illus-wrap{position:relative;flex-shrink:0;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;margin-top:auto;}
+.illus-wrap{position:relative;flex-shrink:0;touch-action:pan-y;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;margin-top:auto;}
 .stock-pip{position:absolute;bottom:-4px;right:-6px;font-size:var(--f-xs);font-family:'DM Mono',monospace;padding:1px 5px;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.15);letter-spacing:.02em;}
 .stock-pip.has{background:var(--text);color:#fff;}
 .stock-pip.none{background:var(--red);color:#fff;}
@@ -194,6 +194,7 @@ input,textarea,.finput,.rate-inp{
 .d-val-row{display:flex;align-items:baseline;gap:4px;}
 .d-val-big{font-size:var(--f-4xl);font-weight:300;font-family:'DM Mono',monospace;letter-spacing:-.02em;line-height:1;}
 .d-val-big.low{color:var(--red);}
+.d-val-big.state{font-family:'Noto Sans SC',sans-serif;font-size:var(--f-xl);font-weight:500;letter-spacing:0;color:var(--green);}
 .d-val-unit{font-size:var(--f-base);color:var(--muted);}
 .d-val-total{font-size:var(--f-base);color:var(--muted);font-family:'DM Mono',monospace;}
 .d-val-pct{font-size:var(--f-base);color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px;}
@@ -205,6 +206,7 @@ input,textarea,.finput,.rate-inp{
 .ob-chip{display:flex;align-items:center;gap:4px;padding:3px 7px 3px 5px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--text2);}
 .ob-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
 .ob-dot.e{background:var(--border2);}
+.ob-empty{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);background:var(--surface2);border:1px dashed var(--border2);border-radius:7px;padding:7px 9px;line-height:1.45;}
 .d-action-btns{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
 .d-act-btn{font-size:var(--f-sm);font-family:'DM Mono',monospace;padding:4px 10px;border-radius:7px;cursor:pointer;letter-spacing:.04em;transition:all .13s;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);}
 .d-act-btn.primary{background:var(--green-l);color:var(--green);border-color:var(--green-m);}
@@ -335,6 +337,13 @@ input,textarea,.finput,.rate-inp{
 .funit{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);}
 .frow.unc{background:rgba(138,94,20,.04);}
 .udot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;}
+.intake-row{align-items:flex-start;}
+.intake-seg{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.intake-option{display:flex;align-items:center;justify-content:center;min-height:32px;padding:6px 8px;border:1px solid var(--border2);border-radius:7px;background:var(--surface2);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.intake-option input{position:absolute;opacity:0;pointer-events:none;}
+.intake-option span{font-size:var(--f-sm);color:var(--text2);font-family:'DM Mono',monospace;letter-spacing:.03em;white-space:nowrap;}
+.intake-option:has(input:checked){border-color:var(--green-m);background:var(--green-l);}
+.intake-option:has(input:checked) span{color:var(--green);}
 
 /* auto-detect badge */
 .detected-badge{display:inline-flex;align-items:center;gap:5px;background:var(--green-l);border:1px solid var(--green-m);border-radius:7px;padding:4px 10px;font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--green);margin:0 13px 10px;letter-spacing:.04em;}
@@ -618,6 +627,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit" id="fi-unit">ml</span></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
+      <div class="frow intake-row"><span class="flabel">录入状态</span>
+        <div class="intake-seg">
+          <label class="intake-option"><input type="radio" name="fi-open-state" value="stock" checked><span>未开封入库</span></label>
+          <label class="intake-option"><input type="radio" name="fi-open-state" value="open"><span>已开封使用</span></label>
+        </div>
+      </div>
       <div class="frow unc"><div class="udot"></div><span class="flabel" style="color:var(--amber)">保质期至</span><input class="finput" id="fi-exp" value="2026-09-01" type="date"></div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="fi-location"><option value="">未填写</option></select></div>
     </div>
@@ -627,6 +642,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><span class="funit" id="mf-unit">ml</span></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="mf-qty" value="1" style="max-width:45px"><span class="funit">件/包</span></div>
+      <div class="frow intake-row"><span class="flabel">录入状态</span>
+        <div class="intake-seg">
+          <label class="intake-option"><input type="radio" name="mf-open-state" value="stock" checked><span>未开封入库</span></label>
+          <label class="intake-option"><input type="radio" name="mf-open-state" value="open"><span>已开封使用</span></label>
+        </div>
+      </div>
       <div class="frow"><span class="flabel">保质期至</span><input class="finput" type="date" id="mf-exp"></div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="mf-location"><option value="">未填写</option></select></div>
     </div>
@@ -1433,21 +1454,45 @@ window.openLocationSelectSheet=function(itemId){
 // ═══════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════
+function ensureOpenState(item){
+  if(!item)return[];
+  const rawCount=Number(item.openCount);
+  const count=Number.isFinite(rawCount)?Math.max(0,rawCount):((item.activePercent||0)>0?1:0);
+  if(!Array.isArray(item.openItems)){
+    const initPct=item.activePercent!==undefined?item.activePercent:100;
+    item.openItems=count>0?Array.from({length:count},()=>initPct):[];
+  }else if(item.openItems.length===0&&count>0){
+    const initPct=item.activePercent!==undefined?item.activePercent:100;
+    item.openItems=Array.from({length:count},()=>initPct);
+  }
+  item.openCount=item.openItems.length;
+  if(!Array.isArray(item.openedDates))item.openedDates=[];
+  const fallbackDate=item.openedDate||null;
+  item.openedDates=item.openItems.map((_,idx)=>item.openedDates[idx]||fallbackDate);
+  item.openedDate=item.openedDates.find(Boolean)||null;
+  return item.openItems;
+}
+function hasOpenItems(item){
+  return ensureOpenState(item).length>0;
+}
 // 获取使用区总余量（所有openItems的总和）
 const getRemain=item=>{
-  if(item.openItems&&Array.isArray(item.openItems)&&item.openItems.length>0){
-    const total=item.openItems.reduce((sum,pct)=>sum+item.packageSize*pct/100,0);
+  const openItems=ensureOpenState(item);
+  if(openItems.length>0){
+    const total=openItems.reduce((sum,pct)=>sum+item.packageSize*pct/100,0);
     return +total.toFixed(1);
   }
+  if(item.openCount===0)return 0;
   return +(item.packageSize*(item.activePercent||0)/100).toFixed(1);
 };
 // 获取总余量（使用区+库存货架+补充装）
 const getTotal=item=>+(getRemain(item)+item.stockCount*item.packageSize+((item.supplement?.stockCount||0)*(item.supplement?.size||0))).toFixed(0);
 // 获取平均百分比（用于向后兼容）
 const getActivePercent=item=>{
-  if(item.openItems&&Array.isArray(item.openItems)&&item.openItems.length>0){
-    const sum=item.openItems.reduce((s,p)=>s+p,0);
-    return Math.round(sum/item.openItems.length);
+  const openItems=ensureOpenState(item);
+  if(openItems.length>0){
+    const sum=openItems.reduce((s,p)=>s+p,0);
+    return Math.round(sum/openItems.length);
   }
   return item.activePercent||0;
 };
@@ -1620,19 +1665,21 @@ function renderDashboard(){
   <div class="dash-list">`;
   items.forEach(item=>{
     const{isLow,exp}=getStatus(item);
-    const pct=getActivePercent(item);
-    const clr=isLow?'var(--red)':pct<30?'var(--amber)':'var(--green)';
+    const opened=hasOpenItems(item);
+    const pct=opened?getActivePercent(item):100;
+    const clr=!opened?'var(--border2)':isLow?'var(--red)':pct<30?'var(--amber)':'var(--green)';
     const dotC=isLow?'r':exp!=='ok'?'a':'g';
-    const days=getDays(item);
+    const days=opened?getDays(item):null;
+    const cap=opened?`${capStr(item)} ${item.stockCount>0?`· +${item.stockCount}库`:''} ${days?`· ~${days}天`:''}`:`未开封 · 库存 ${item.stockCount}件`;
     h+=`<div class="dl-row" onclick="openDetail('${item.id}')">
       <div class="dl-icon">${getSVG({...item,activePercent:pct},28,36)}</div>
       <div class="dl-info">
         <div class="dl-name">${item.name}</div>
-        <div class="dl-cap">${capStr(item)} ${item.stockCount>0?`· +${item.stockCount}库`:''} ${days?`· ~${days}天`:''}</div>
+        <div class="dl-cap">${cap}</div>
       </div>
       <div class="dl-bar-wrap">
         <div class="dl-bar"><div class="dl-bar-fill" style="width:${pct}%;background:${clr}"></div></div>
-        <div class="dl-pct">${pct}%</div>
+        <div class="dl-pct">${opened?`${pct}%`:'未开封'}</div>
       </div>
       <div class="dl-dot ${dotC}"></div>
     </div>`;
@@ -1657,8 +1704,10 @@ function renderGallery(){
     h+=`<div class="cat-label">${cat}</div><div class="gallery-grid">`;
     list.forEach(item=>{
       const{isLow,exp}=getStatus(item);
+      const opened=hasOpenItems(item);
       let cls='gcard';if(isLow)cls+=' warn-low';else if(exp!=='ok')cls+=' warn-exp';
       const badges=[
+        !opened&&item.stockCount>0?'<span class="bdg g">未开</span>':'',
         isLow?'<span class="bdg r">补货</span>':'',
         exp==='urgent'?'<span class="bdg a">到期</span>':'',
         exp==='soon'?`<span class="bdg a" style="background:var(--amber-l);color:var(--amber);border:1px solid rgba(138,94,20,.22)">临期</span>`:'',
@@ -1666,8 +1715,8 @@ function renderGallery(){
       ].join('');
       const sc=item.stockCount+(item.supplement?.stockCount||0);
       const pip=sc>0?`<div class="stock-pip has">+${sc}</div>`:(isLow?`<div class="stock-pip none">缺</div>`:'');
-      const avgPct=getActivePercent(item);
-      const isEmpty=getRemain(item)===0;
+      const avgPct=opened?getActivePercent(item):100;
+      const isEmpty=opened&&getRemain(item)===0;
       h+=`<div class="${cls}" onclick="openDetail('${item.id}')">
         ${badges?`<div class="gcard-badges">${badges}</div>`:''}
         <div style="text-align:center">
@@ -1677,13 +1726,12 @@ function renderGallery(){
         <div class="illus-wrap" id="illus-${item.id}" data-id="${item.id}" style="width:64px;height:106px">
           ${getSVG({...item,activePercent:avgPct},64,106)}${pip}
         </div>
-        <div class="gcard-cap${isLow?' low':isEmpty?' empty':''}">${isEmpty?'已用完':capStr(item)}</div>
+        <div class="gcard-cap${isLow?' low':isEmpty?' empty':''}">${opened?(isEmpty?'已用完':capStr(item)):`库存 ${item.stockCount}件`}</div>
       </div>`;
     });
     h+='</div>';
   }
   document.getElementById('gallery-body').innerHTML=h;
-  document.querySelectorAll('.illus-wrap[data-id]').forEach(el=>setupDrag(el,el.dataset.id,false));
 }
 
 // ═══════════════════════════════════════════════
@@ -1695,13 +1743,7 @@ const DRAG_THRESHOLD=6; // px — below this = tap, not drag
 
 function setupDrag(el,id,isDetail,openIndex=0){
   const item=items.find(i=>i.id===id);if(!item)return;
-  // 确保openItems存在（只在初始化时，不要覆盖已有数据）
-  if(isDetail&&(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0)){
-    // 如果openItems不存在，从activePercent初始化，但保持openCount
-    const initPct=item.activePercent!==undefined?item.activePercent:100;
-    item.openItems=Array.from({length:item.openCount||1},()=>initPct);
-    item.openCount=item.openItems.length;
-  }
+  if(!hasOpenItems(item))return;
   let down=false,dragging=false,sy=0,sx=0,sv=0;
   let framePending=false,lastDy=0;
   const gY=e=>e.touches?e.touches[0].clientY:e.clientY;
@@ -1715,12 +1757,6 @@ function setupDrag(el,id,isDetail,openIndex=0){
     if(isDetail){
       // 详情页：使用选中单件的百分比
       const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
-      // 确保openItems数组存在且索引有效
-      if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
-        const initPct=item.activePercent!==undefined?item.activePercent:100;
-        item.openItems=Array.from({length:item.openCount||1},()=>initPct);
-        item.openCount=item.openItems.length;
-      }
       // 确保索引在有效范围内
       const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
       sv=item.openItems[safeIdx]||0;
@@ -1751,12 +1787,6 @@ function setupDrag(el,id,isDetail,openIndex=0){
       if(isDetail){
         // 详情页：只更新选中单件的百分比，不影响其他件
         const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
-        // 确保openItems数组存在
-        if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
-          const initPct=item.activePercent!==undefined?item.activePercent:100;
-          item.openItems=Array.from({length:item.openCount||1},()=>initPct);
-          item.openCount=item.openItems.length;
-        }
         // 确保索引在有效范围内，只更新这一个索引的值
         const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
         item.openItems[safeIdx]=newPct;
@@ -1772,6 +1802,7 @@ function setupDrag(el,id,isDetail,openIndex=0){
         }
       }else{
         // 画廊页：更新平均百分比（向后兼容）
+        if(item.openItems&&item.openItems.length) item.openItems=item.openItems.map(()=>newPct);
         item.activePercent=newPct;
         updateSVGLevel(item,isDetail);
         refreshGCard(item);
@@ -1811,8 +1842,9 @@ function refreshGCard(item){
   const re=card.querySelector('.gcard-cap');
   if(re){
     const{isLow}=getStatus(item);
-    const isEmpty=getRemain(item)===0;
-    re.textContent=isEmpty?'已用完':capStr(item);
+    const opened=hasOpenItems(item);
+    const isEmpty=opened&&getRemain(item)===0;
+    re.textContent=opened?(isEmpty?'已用完':capStr(item)):`库存 ${item.stockCount}件`;
     re.className='gcard-cap'+(isLow?' low':isEmpty?' empty':'');
   }
 }
@@ -1825,29 +1857,30 @@ let selectedOpenIndex={};
 // ═══════════════════════════════════════════════
 function openDetail(id){
   const item=items.find(i=>i.id===id);if(!item)return;
-  // 确保openItems数组存在（只在初始化时，不要覆盖已有数据）
-  if(!item.openItems||!Array.isArray(item.openItems)||item.openItems.length===0){
-    // 如果openItems不存在，从activePercent初始化，但保持openCount
-    const initPct=item.activePercent!==undefined?item.activePercent:100;
-    item.openItems=Array.from({length:item.openCount||1},()=>initPct);
-    item.openCount=item.openItems.length;
-  }
+  ensureOpenState(item);
   // 初始化选中索引
   if(selectedOpenIndex[id]===undefined)selectedOpenIndex[id]=0;
+  if(selectedOpenIndex[id]>=item.openItems.length)selectedOpenIndex[id]=Math.max(0,item.openItems.length-1);
   const currentIndex=selectedOpenIndex[id];
-  const currentPct=item.openItems[currentIndex]||0;
+  const opened=item.openItems.length>0;
+  const currentPct=opened?(item.openItems[currentIndex]||0):100;
   
   document.getElementById('d-title').textContent=item.name;
   const{isLow,exp}=getStatus(item);
   const expInfo=getExpInfo(item);
-  const days=getDays(item);
-  const isEmpty=getRemain(item)===0;
+  const days=opened?getDays(item):null;
+  const isEmpty=opened&&getRemain(item)===0;
+  const currentOpenedDate=opened?(item.openedDates?.[currentIndex]||item.openedDate||null):null;
+  const openActionHTML=opened
+    ? `${currentPct===100?`<button class="d-act-btn" onclick="openPutBack('${item.id}')">放回库存</button>`:`<button class="d-act-btn danger" onclick="openRemoveCurrent('${item.id}')">${currentPct===0?'移除空件':'移除这件'}</button>`}
+       ${item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">${isEmpty?'取出新件 →':'再开一件'}</button>`:''}`
+    : `${item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">开封使用</button>`:''}`;
 
-  const obHTML=item.openItems.map((pct,i)=>{
+  const obHTML=opened?item.openItems.map((pct,i)=>{
     const isEmptyItem=pct===0;
     const isSelected=i===currentIndex;
     return `<div class="ob-chip${isEmptyItem?' ob-chip-e':''}${isSelected?' ob-chip-selected':''}" onclick="selectOpenItem('${id}',${i})" style="cursor:pointer;${isSelected?'border:1.5px solid var(--green);background:var(--green-l);':''}"><div class="ob-dot${isEmptyItem?' e':''}"></div><span>${isEmptyItem?'空':pct+'%'}</span></div>`;
-  }).join('');
+  }).join(''):'<div class="ob-empty">还没有开封。库存取出后才开始记录余量和开封日。</div>';
 
   const shelfHTML=Array.from({length:item.stockCount},(_,i)=>`
     <div class="shelf-item" onclick="openTake('${item.id}')">
@@ -1871,26 +1904,30 @@ function openDetail(id){
   <div class="d-hero">
     <div class="d-illus" id="illus-d-${item.id}" data-id="${item.id}">
       ${getSVG({...item,activePercent:currentPct},80,138,true)}
-      <div class="d-illus-hint">↕ 拖动</div>
+      <div class="d-illus-hint">${opened?'↕ 拖动':'未开封'}</div>
     </div>
     <div style="flex:1;min-width:0">
       <div class="d-name">${item.name}</div>
       <div class="d-brand">${item.brand} · ${item.packageSize}${item.unit}</div>
       <div class="d-val-row">
-        <span class="d-val-big${isLow?' low':currentPct===0?' empty':''}" id="d-v">${currentPct===0?'空':+(item.packageSize*currentPct/100).toFixed(1)}</span>
-        ${currentPct>0?`<span class="d-val-unit">/</span><span class="d-val-total">${item.packageSize}${item.unit}</span>`:''}
+        <span class="d-val-big${opened?(isLow?' low':currentPct===0?' empty':''):' state'}" id="d-v">${opened?(currentPct===0?'空':+(item.packageSize*currentPct/100).toFixed(1)):'未开封'}</span>
+        ${opened&&currentPct>0?`<span class="d-val-unit">/</span><span class="d-val-total">${item.packageSize}${item.unit}</span>`:''}
       </div>
-      <div class="d-val-pct" id="d-pct">${currentPct}%</div>
+      <div class="d-val-pct" id="d-pct">${opened?`${currentPct}%`:`库存 ${item.stockCount} 件`}</div>
       <div class="usage-area">
         <div class="usage-label">使用区（${item.openCount}件）</div>
         <div class="ob-row">${obHTML}</div>
         <div class="d-action-btns">
-          ${item.openCount>1?`<button class="d-act-btn danger" onclick="openRetire('${item.id}')">移除空件</button>`:''}
-          ${isEmpty&&item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">取出新件 →</button>`:''}
+          ${openActionHTML}
     </div>
   </div>
 </div>
 
+  </div>
+  <div class="d-sec">
+    <div class="d-sec-title">开封记录</div>
+    <div class="d-row"><span class="d-row-label">当前状态</span><span class="d-row-val ${opened?'green':''}">${opened?'使用中':'未开封'}</span></div>
+    <div class="d-row"><span class="d-row-label">${opened?'当前件开封':'首次开封'}</span><span class="d-row-val">${opened?(currentOpenedDate||'未记录'):'—'}</span></div>
   </div>
   <div class="d-sec">
     <div class="d-sec-title">库存货架（${item.stockCount}件未开封）</div>
@@ -1931,7 +1968,7 @@ function openDetail(id){
   </div>`;
 
   document.getElementById('d-scroll').innerHTML=html;
-  setupDrag(document.getElementById('illus-d-'+item.id),item.id,true,currentIndex);
+  if(opened)setupDrag(document.getElementById('illus-d-'+item.id),item.id,true,currentIndex);
   nav('scr-detail');
 }
 
@@ -1940,16 +1977,7 @@ window.selectOpenItem=function(itemId,index){
   const item=items.find(i=>i.id===itemId);
   if(!item||!item.openItems||index>=item.openItems.length)return;
   selectedOpenIndex[itemId]=index;
-  const currentPct=item.openItems[index]||0;
-  // 刷新详情页显示
-  refreshDetailPage(itemId);
-  // 更新主插画显示选中单件的百分比
-  const illusEl=document.getElementById('illus-d-'+itemId);
-  if(illusEl){
-    const svg=getSVG({...item,activePercent:currentPct},80,138,true);
-    illusEl.innerHTML=svg+'<div class="d-illus-hint">↕ 拖动</div>';
-    setupDrag(illusEl,itemId,true,index);
-  }
+  openDetail(itemId);
 };
 
 // 刷新详情页
@@ -1981,6 +2009,18 @@ function refreshDetailPage(itemId){
 }
 
 function refreshDStats(item){
+  ensureOpenState(item);
+  if(!item.openItems.length){
+    const el=document.getElementById('d-v');
+    if(el){
+      el.textContent='未开封';
+      el.className='d-val-big state';
+    }
+    const p=document.getElementById('d-pct');if(p)p.textContent=`库存 ${item.stockCount} 件`;
+    const t=document.getElementById('d-tot');if(t)t.textContent=getTotal(item)+' '+item.unit;
+    const d=document.getElementById('d-days');if(d)d.textContent='—';
+    return;
+  }
   const currentIndex=selectedOpenIndex[item.id]||0;
   const currentPct=item.openItems&&item.openItems[currentIndex]!==undefined?item.openItems[currentIndex]:getActivePercent(item);
   // 状态区显示当前选中单件的余量（分子）和单件容量（分母）
@@ -2019,6 +2059,7 @@ function closeSheet(){
 
 window.openTake=function(itemId){
   const item=items.find(i=>i.id===itemId);if(!item||item.stockCount===0){closeSheet();return;}
+  const alreadyOpened=hasOpenItems(item);
   const body=`
     <div class="qty-row"><span class="qty-label">取出数量</span>
       <div class="qty-spin">
@@ -2029,18 +2070,24 @@ window.openTake=function(itemId){
       </div>
     </div>
     <div style="font-size:var(--f-base);color:var(--text2);line-height:1.8">
-      取出后加入「使用区」，当前已开 <b>${item.openCount}</b> 件。<br>
+      ${alreadyOpened?'取出后加入「使用区」。':'开封后加入「使用区」，并记录今天为首次开封日。'}<br>
+      当前已开 <b>${item.openCount}</b> 件。<br>
       取后库存：<span id="tk-aft-s" style="font-family:'DM Mono',monospace">${item.stockCount-1} 件</span> ·
       使用区：<span id="tk-aft-o" style="font-family:'DM Mono',monospace">${item.openCount+1} 件</span>
     </div>`;
-  openSheet(`取出库存 · ${item.name}`,`库存 ${item.stockCount} 件`,body,'取出',()=>{
+  openSheet(`${alreadyOpened?'取出库存':'开封使用'} · ${item.name}`,`库存 ${item.stockCount} 件`,body,alreadyOpened?'取出':'开封使用',()=>{
     const n=parseInt(document.getElementById('tk-n').textContent);
     item.stockCount-=n;
     // 确保openItems数组存在
     if(!item.openItems||!Array.isArray(item.openItems))item.openItems=[];
+    if(!Array.isArray(item.openedDates))item.openedDates=[];
     // 新件加入使用区，初始为100%
-    for(let i=0;i<n;i++)item.openItems.push(100);
+    for(let i=0;i<n;i++){
+      item.openItems.push(100);
+      item.openedDates.push(today());
+    }
     item.openCount=item.openItems.length;
+    if(!item.openedDate)item.openedDate=today();
     addLog(item,'开封',`从库存取出 ×${n}`,0);
     save();closeSheet();openDetail(itemId);
   });
@@ -2055,6 +2102,53 @@ window.tkQty=function(d,itemId){
   document.getElementById('tk-aft-o').textContent=(item.openCount+nv)+' 件';
   document.getElementById('tk-m').disabled=nv<=1;
   document.getElementById('tk-p').disabled=nv>=item.stockCount;
+};
+
+window.openPutBack=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  ensureOpenState(item);
+  if(!item.openItems.length)return;
+  const idx=Math.max(0,Math.min(selectedOpenIndex[itemId]||0,item.openItems.length-1));
+  const pct=item.openItems[idx]||0;
+  if(pct<100){
+    showError('这件已经记录过消耗，不能放回未开封库存');
+    return;
+  }
+  openSheet(`放回库存 · ${item.name}`,'撤销这次开封',
+    `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">这件会从「使用区」移回「库存货架」。适合误触开封、还没有实际使用的情况。</div>`,
+    '放回库存',()=>{
+      item.openItems.splice(idx,1);
+      if(Array.isArray(item.openedDates))item.openedDates.splice(idx,1);
+      item.stockCount+=1;
+      item.openCount=item.openItems.length;
+      item.activePercent=item.openItems.length?getActivePercent(item):0;
+      item.openedDate=(item.openedDates||[]).find(Boolean)||null;
+      selectedOpenIndex[itemId]=Math.max(0,Math.min(idx,item.openItems.length-1));
+      addLog(item,'撤销','放回未开封库存',0);
+      save();closeSheet();openDetail(itemId);
+    });
+};
+
+window.openRemoveCurrent=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  ensureOpenState(item);
+  if(!item.openItems.length)return;
+  const idx=Math.max(0,Math.min(selectedOpenIndex[itemId]||0,item.openItems.length-1));
+  const pct=item.openItems[idx]||0;
+  const remain=+(item.packageSize*pct/100).toFixed(1);
+  const isEmpty=pct===0;
+  openSheet(`${isEmpty?'移除空件':'移除这件'} · ${item.name}`,'',
+    `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">这只会移除当前选中的使用中单件，不会删除商品条目。${isEmpty?'':'当前剩余约 '+remain+item.unit+'，移除后会从总余量扣除。'}</div>`,
+    isEmpty?'移除空件':'确认移除',()=>{
+      item.openItems.splice(idx,1);
+      if(Array.isArray(item.openedDates))item.openedDates.splice(idx,1);
+      item.openCount=item.openItems.length;
+      item.activePercent=item.openItems.length?getActivePercent(item):0;
+      item.openedDate=(item.openedDates||[]).find(Boolean)||null;
+      selectedOpenIndex[itemId]=Math.max(0,Math.min(idx,item.openItems.length-1));
+      addLog(item,'移除',isEmpty?'移除空件':`移除使用中这件`,isEmpty?0:-remain);
+      save();closeSheet();openDetail(itemId);
+    },!isEmpty);
 };
 
 window.openPour=function(itemId){
@@ -2088,7 +2182,9 @@ window.openRetire=function(itemId){
       // 移除最后一个（或选中的）
       const idx=selectedOpenIndex[itemId]!==undefined?selectedOpenIndex[itemId]:item.openItems.length-1;
       item.openItems.splice(idx,1);
+      if(Array.isArray(item.openedDates))item.openedDates.splice(idx,1);
       item.openCount=item.openItems.length;
+      item.openedDate=(item.openedDates||[]).find(Boolean)||null;
       if(selectedOpenIndex[itemId]>=item.openCount)selectedOpenIndex[itemId]=Math.max(0,item.openCount-1);
       addLog(item,'移除','移除空件',0);
       save();closeSheet();openDetail(itemId);
@@ -2823,17 +2919,22 @@ function confirmAdd(){
   const qty=parseInt(isManual?document.getElementById('mf-qty').value:document.getElementById('fi-qty').value)||1;
   const exp=isManual?document.getElementById('mf-exp').value:document.getElementById('fi-exp').value;
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
+  const openStateName=isManual?'mf-open-state':'fi-open-state';
+  const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
   const finalUnit=formUnit||d.unit;
+  const logs=[{type:'录入',desc:`购入×${qty}`,delta:size*qty,date:today()}];
+  if(startsOpened)logs.push({type:'开封',desc:'录入时标记已开封',delta:0,date:today()});
 
   const newItem={
     id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,
-    packageSize:size,unit:finalUnit,activePercent:100,openCount:1,stockCount:Math.max(0,qty-1),
+    packageSize:size,unit:finalUnit,activePercent:startsOpened?100:0,openCount:startsOpened?1:0,stockCount:startsOpened?Math.max(0,qty-1):qty,
     dailyUse:d.daily,color:d.color,shape:d.shape,
-    expiryDate:exp||null,openedDate:today(),location:location||null,
-    logs:[{type:'录入',desc:`购入×${qty}`,delta:size*qty,date:today()}],
-    openItems:[100] // 初始化openItems数组
+    expiryDate:exp||null,openedDate:startsOpened?today():null,location:location||null,
+    logs,
+    openItems:startsOpened?[100]:[],
+    openedDates:startsOpened?[today()]:[]
   };
   items.push(newItem);
   save();
@@ -2859,6 +2960,8 @@ function confirmAdd(){
   document.getElementById('manual-form').style.display='block';
   document.getElementById('mf-name').value='';
   document.getElementById('mf-detect-badge').innerHTML='';
+  document.querySelector('input[name="mf-open-state"][value="stock"]').checked=true;
+  document.querySelector('input[name="fi-open-state"][value="stock"]').checked=true;
   _lastDetected=null;
 }
 
@@ -2874,11 +2977,15 @@ function runDeduction(){
   const log=[];
   items.forEach(item=>{
     if(!item.dailyUse)return;
+    const openItems=ensureOpenState(item);
+    if(!openItems.length)return;
     const dPct=(item.dailyUse*days/item.packageSize)*100;
-    const before=item.activePercent;
-    item.activePercent=+Math.max(0,item.activePercent-dPct).toFixed(1);
-    const actual=+(before-item.activePercent).toFixed(1);
-    if(actual>0.05){log.push(`${item.name} −${+(actual/100*item.packageSize).toFixed(1)}${item.unit}`);item.logs.push({type:'自动',desc:`每日扣减×${days}天`,delta:-+(actual/100*item.packageSize).toFixed(1),date:today()});}
+    const beforeRemain=getRemain(item);
+    item.openItems=openItems.map(pct=>+Math.max(0,pct-dPct).toFixed(1));
+    item.openCount=item.openItems.length;
+    item.activePercent=getActivePercent(item);
+    const actual=+(beforeRemain-getRemain(item)).toFixed(1);
+    if(actual>0.05){log.push(`${item.name} −${actual}${item.unit}`);item.logs.push({type:'自动',desc:`每日扣减×${days}天`,delta:-actual,date:today()});}
   });
   localStorage.setItem(key,String(now));save();
   if(log.length){document.getElementById('dt-body').textContent=`间隔${days}天 · `+log.join('  ');const t=document.getElementById('deduct-toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000);}
