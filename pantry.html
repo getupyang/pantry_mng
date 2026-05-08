@@ -1101,6 +1101,7 @@ const PANTRY_LOCATIONS_KEY='pantry_locations';
 const PANTRY_CLIENT_ID_KEY='pantry_client_id';
 const PANTRY_FAMILY_ID_KEY='pantry_family_id';
 const PANTRY_FAMILY_VERSION_KEY='pantry_family_version';
+const PANTRY_ATTRIBUTION_KEY='pantry_attribution';
 let pantryFamilyId=localStorage.getItem(PANTRY_FAMILY_ID_KEY)||null;
 let pantryFamilyVersion=parseInt(localStorage.getItem(PANTRY_FAMILY_VERSION_KEY)||'0');
 let cloudReady=false;
@@ -1135,6 +1136,45 @@ function getOrCreateClientId(){
     localStorage.setItem(PANTRY_CLIENT_ID_KEY,id);
   }
   return id;
+}
+
+function getAttribution(){
+  try{
+    const raw=localStorage.getItem(PANTRY_ATTRIBUTION_KEY);
+    return raw?JSON.parse(raw):{};
+  }catch{
+    return {};
+  }
+}
+
+function captureAttribution(){
+  const params=new URLSearchParams(location.search||'');
+  const touch={
+    from:(params.get('from')||params.get('utm_source')||params.get('source')||'').slice(0,80),
+    campaign:(params.get('campaign')||params.get('utm_campaign')||'').slice(0,80),
+    variant:(params.get('variant')||params.get('ref')||'').slice(0,80),
+    capturedAt:new Date().toISOString()
+  };
+  if(!touch.from&&!touch.campaign&&!touch.variant)return getAttribution();
+  const current=getAttribution();
+  const next={
+    first:current.first||touch,
+    latest:touch
+  };
+  try{localStorage.setItem(PANTRY_ATTRIBUTION_KEY,JSON.stringify(next));}catch{}
+  return next;
+}
+
+function getEventAttributionProperties(){
+  const attr=getAttribution();
+  return {
+    from:attr.latest?.from||attr.first?.from||null,
+    campaign:attr.latest?.campaign||attr.first?.campaign||null,
+    variant:attr.latest?.variant||attr.first?.variant||null,
+    firstFrom:attr.first?.from||null,
+    firstCampaign:attr.first?.campaign||null,
+    firstVariant:attr.first?.variant||null
+  };
 }
 
 function getCurrentPayload(){
@@ -1216,6 +1256,7 @@ function trackEvent(eventName,properties={}){
       familyId:pantryFamilyId||null,
       pagePath:location.pathname,
       properties:{
+        ...getEventAttributionProperties(),
         screen:typeof _curScr==='string'?_curScr:null,
         tab:typeof activeTab==='number'?activeTab:null,
         ...properties
@@ -3356,6 +3397,7 @@ document.addEventListener('touchmove',e=>{
 // 应用字号设置
 applyFontSize(loadFontSize());
 ensureExpiryInputsVisible();
+captureAttribution();
 
 const now2=new Date();
 document.getElementById('today-str').textContent=

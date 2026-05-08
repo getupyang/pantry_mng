@@ -105,6 +105,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     <div class="card">
       <div class="section-title">识别与地区</div>
       <div class="list" id="recognitionCounts" style="margin-bottom:14px"></div>
+      <div class="section-title">渠道来源</div>
+      <div class="list" id="channelCounts" style="margin-bottom:14px"></div>
       <div class="list" id="countryCounts"></div>
     </div>
   </div>
@@ -354,6 +356,7 @@ async function load(){
   renderDaily(data.daily||[]);
   renderList('eventCounts',data.eventCounts||[]);
   renderList('recognitionCounts',data.recognitionCounts||[],'暂无识别记录');
+  renderList('channelCounts',data.channelCounts||[],'暂无渠道数据');
   renderList('countryCounts',data.countryCounts||[],'暂无地区数据');
   renderFamilies(data.families||[]);
   renderRecent(data.recentEvents||[]);

@@ -43,6 +43,14 @@ function uniqueCount(rows, key) {
   return new Set(rows.map((row) => row[key]).filter(Boolean)).size;
 }
 
+function channelName(event) {
+  const props = event.properties || {};
+  const from = props.from || props.firstFrom || props.utm_source || props.source;
+  const campaign = props.campaign || props.firstCampaign || props.utm_campaign;
+  if (from && campaign) return `${from}/${campaign}`;
+  return from || campaign || "direct";
+}
+
 function summarizeFamily(family, clients) {
   const data = family.data_json || {};
   const items = Array.isArray(data.items) ? data.items : [];
@@ -119,6 +127,7 @@ export default async function handler(req, res) {
     const activeClients = clients.filter((client) => new Date(client.last_seen_at) >= new Date(activeSince));
 
     const eventCounts = countBy(events, (event) => event.event_name);
+    const channelCounts = countBy(events, channelName);
     const countryCounts = countBy(events, (event) => event.country || "unknown");
     const recognitionCounts = countBy(recognition, (row) => `${row.req_type}_${row.status}`);
     const recentEvents = events.slice(0, 50).map((event) => ({
@@ -146,6 +155,7 @@ export default async function handler(req, res) {
       },
       daily: summarizeDaily(events, clients, since),
       eventCounts,
+      channelCounts,
       countryCounts,
       recognitionCounts,
       families: families.slice(0, 100).map((family) => summarizeFamily(family, clients)),
