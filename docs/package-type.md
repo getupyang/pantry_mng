@@ -17,3 +17,13 @@
 - 发布前发现线上运行 `fix/pantry-availability-20261006` 的修复（`67a813c`），已确认该分支 HTML 与线上一致，并合并保留云端重试、全局错误提示和到期解析修复。合并后的浏览器局部回归及 `node --test scripts/test-intake.cjs` 7 项测试全部通过。
 - 生产实测可设置 `PANTRY_BASE_URL=https://pantry-mng.vercel.app` 运行真实测试脚本；仍会写入独立测试家庭。发布仅使用 Git 提交生成的文件包，不包含工作区其他未提交修改。
 - 适用范围与过时风险：以上描述对应本分支的单 HTML 页面实现；页面结构、存储流程或部署方式变化后需重新核对。无需服务端迁移；正式发布后刷新网页加载新前端。
+
+### 生产发布与验证
+
+- 发布时间/验证日期：2026-10-06（KST）。发布代码 commit：`15964b3`，分支 `codex/package-type-filter`，已推送 GitHub；未合并 main。
+- Vercel 生产部署：`dpl_4P8HYctfLXgMYemVRoJVRtmngnK1`，正式入口 `https://pantry-mng.vercel.app/pantry.html`。
+- 已执行：`vercel deploy --prod --yes`，随后在正式域名运行 `test-photo-live.cjs`。真实上传、模型返回、手动选旅行装、PUT 200、独立 GET 200、浏览器存储、刷新保留筛选及正装排除该条目均通过。浏览器无未捕获运行错误。
+- 正式 HTML 与发布文件 SHA-256 一致：`93e45147b160ff3850f1eb55a91475ea1dfd609c3ae8bcd435ac9b3887eb7839`。
+- 本次验证为 smoke + 相关功能回归 + 真实图片端到端测试，没有执行全部产品功能回归。没有数据库结构迁移；使用原有 JSON 字段保存。月份期限仍按已有规则转换为该月 1 日，非图片上明确标注的日。
+- 用户验收：刷新正式网页，拍照录入后手动选择包装类型；在物品库点击旅行装，再刷新，筛选应继续有效。旧物品可从详情补标签。
+- 发布从 Git archive 构建，未包含工作区 `.gitignore` 与 `growth_loop` 的未提交修改。上述部署状态仅代表验证时刻，之后可能被其他发布替换。
