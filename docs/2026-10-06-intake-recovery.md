@@ -11,3 +11,9 @@
 - 验证层级：smoke + touched suite。未改 schema 或共享后端逻辑，因此未做无关功能全量回归。真实 iPhone Safari 拍照弹窗仍需用户设备验收。
 - 适用范围：此版本的单 HTML 应用和现有 Vercel/Supabase 部署。
 - 可能过时：平台状态、网络可达性和免费计划政策为当时状态；免费项目仍可能因低活跃自动暂停。官方说明：https://supabase.com/docs/guides/platform/free-project-pausing 。未添加伪造活动或付费升级。
+
+## 发布记录
+
+- 实现 commit：`f81bb38`，分支 `fix/pantry-availability-20261006`。
+- 预览部署：`dpl_CjACJ3Q458tu4Z56nVWNJacXEa6n`，Ready，根路径已返回应用内容。
+- 正式发布采用此分支工作树；保留原 main 工作区无关差异。
