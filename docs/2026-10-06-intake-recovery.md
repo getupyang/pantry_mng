@@ -17,3 +17,7 @@
 - 实现 commit：`f81bb38`，分支 `fix/pantry-availability-20261006`。
 - 预览部署：`dpl_CjACJ3Q458tu4Z56nVWNJacXEa6n`，Ready，根路径已返回应用内容。
 - 正式发布采用此分支工作树；保留原 main 工作区无关差异。
+- 生产部署 commit：`34e7a92`（实现 `f81bb38`），部署 `dpl_47cYqYPy3HuxgZQrbsxjtMGNirNz`，Ready，别名 `pantry-mng.vercel.app`。
+- 生产发布后验证：`curl https://pantry-mng.vercel.app/` 返回 200，内容 SHA-256 与修复文件一致；真实图片识别返回 200；修复解析返回正确 EXP 月份；独立测试家庭 PUT 后 GET 内容一致（version 3）。
+- Chrome 预览完整验证到系统图片选择器；上传后页面结果未完成自动化验收，真实模型识别以生产 API smoke 核验。用户正在使用浏览器，未继续干扰其他页面。
+- 数据库恢复后 Database/PostgREST Healthy，Realtime 曾仍 Coming up；Pantry 不依赖 Realtime。未执行数据库重建、迁移或清理浏览器数据。
