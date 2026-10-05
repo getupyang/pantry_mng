@@ -479,6 +479,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
 .undo-btn:hover{background:rgba(255,255,255,.25);}
 .undo-progress{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 10px 10px;background:rgba(255,255,255,.3);transition:width linear;}
 </style>
+<style>
+.package-select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:7px;max-width:100%;min-width:0;}
+.package-filters{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 14px;border-bottom:1px solid var(--border);}
+.package-filter-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.package-filter-options button,.package-empty button{font:inherit;font-size:var(--f-sm);padding:8px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;}
+.package-filter-options button[aria-pressed="true"]{background:var(--green-l);border-color:var(--green);color:var(--green);}
+.package-label{font-size:var(--f-sm);color:var(--muted);margin-top:5px;}
+.package-empty{padding:28px 16px;text-align:center;color:var(--muted);line-height:1.7;}
+</style>
 <script src="config.js"></script>
 </head>
 <body>
@@ -677,6 +686,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit" id="fi-unit">ml</span></div>
+      <div class="frow"><label class="flabel" for="fi-package-type">包装类型</label><select class="package-select" id="fi-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
@@ -692,6 +702,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div id="mf-detect-badge"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><span class="funit" id="mf-unit">ml</span></div>
+      <div class="frow"><label class="flabel" for="mf-package-type">包装类型</label><select class="package-select" id="mf-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="mf-qty" value="1" style="max-width:45px"><span class="funit">件/包</span></div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
@@ -1095,8 +1106,32 @@ const DEFAULT=[
   {id:'11',name:'洗衣液',brand:'碧浪',cat:'清洁',packageSize:3000,unit:'ml',activePercent:70,openCount:1,stockCount:1,dailyUse:30,color:['#d4e0f0','#4860a0','#182860'],shape:'laundryJug',expiryDate:'2028-06-01',openedDate:'2026-01-20',logs:[{type:'录入',desc:'购入×2桶',delta:6000,date:'2026-01-20'}]},
 ];
 
-let items=loadItems();
 const PANTRY_ITEMS_KEY='pantry_v4';
+let items=loadItems();
+const PACKAGE_TYPES={travel:'旅行装',regular:'正装',refill:'补充装'};
+const PACKAGE_FILTER_KEY='pantry_package_filter';
+const validPackageType=value=>Object.prototype.hasOwnProperty.call(PACKAGE_TYPES,value);
+const packageTypeLabel=value=>validPackageType(value)?PACKAGE_TYPES[value]:'未设置';
+let packageFilter='all';
+try{
+  const stored=localStorage.getItem(PACKAGE_FILTER_KEY);
+  if(validPackageType(stored))packageFilter=stored;
+}catch{}
+function setPackageFilter(value){
+  packageFilter=validPackageType(value)?value:'all';
+  try{localStorage.setItem(PACKAGE_FILTER_KEY,packageFilter);}catch{}
+  renderGallery();
+}
+function openPackageTypeSheet(itemId){
+  const item=items.find(it=>it.id===itemId);if(!item)return;
+  const options=Object.entries(PACKAGE_TYPES).map(([value,label])=>`<option value="${value}" ${item.packageType===value?'selected':''}>${label}</option>`).join('');
+  openSheet('包装类型',item.name,`<label for="edit-package-type">选择包装类型</label> <select class="package-select" id="edit-package-type"><option value="">请选择</option>${options}</select>`,'保存',()=>{
+    const value=document.getElementById('edit-package-type').value;
+    if(!validPackageType(value)){showError('请选择包装类型');return;}
+    item.packageType=value;
+    save();closeSheet();renderGallery();openDetail(itemId);
+  });
+}
 const PANTRY_LOCATIONS_KEY='pantry_locations';
 const PANTRY_CLIENT_ID_KEY='pantry_client_id';
 const PANTRY_FAMILY_ID_KEY='pantry_family_id';
@@ -1809,13 +1844,19 @@ function renderDashboard(){
 //  GALLERY
 // ═══════════════════════════════════════════════
 function renderGallery(){
+  const filterHTML=`<div class="package-filters"><div style="font-size:var(--f-sm);color:var(--muted)">包装类型</div><div class="package-filter-options" role="group" aria-label="按包装类型筛选">${Object.entries({all:'全部',...PACKAGE_TYPES}).map(([value,label])=>`<button type="button" aria-pressed="${packageFilter===value}" onclick="setPackageFilter('${value}')">${label}</button>`).join('')}</div></div>`;
   if(items.length===0){
-    document.getElementById('gallery-body').innerHTML=htmlEmptyIntakeBlock('gallery');
+    document.getElementById('gallery-body').innerHTML=filterHTML+htmlEmptyIntakeBlock('gallery');
+    return;
+  }
+  const visibleItems=items.filter(it=>packageFilter==='all'||it.packageType===packageFilter);
+  if(visibleItems.length===0){
+    document.getElementById('gallery-body').innerHTML=filterHTML+`<div class="package-empty">暂无标记为${packageTypeLabel(packageFilter)}的物品<br>可以在物品详情中补充包装类型。<br><button type="button" onclick="setPackageFilter('all')">查看全部</button></div>`;
     return;
   }
   const cats={};
-  items.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
-  let h='';
+  visibleItems.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
+  let h=filterHTML;
   for(const[cat,list] of Object.entries(cats)){
     h+=`<div class="cat-label">${cat}</div><div class="gallery-grid">`;
     list.forEach(item=>{
@@ -1838,6 +1879,7 @@ function renderGallery(){
         <div style="text-align:center">
           <div class="gcard-name">${item.name}</div>
           <div class="gcard-brand">${item.brand}</div>
+          <div class="package-label">${packageTypeLabel(item.packageType)}</div>
         </div>
         <div class="illus-wrap" id="illus-${item.id}" data-id="${item.id}" style="width:64px;height:106px">
           ${getSVG({...item,activePercent:avgPct},64,106)}${pip}
@@ -2066,7 +2108,8 @@ function openDetail(id){
     <div class="d-row"><span class="d-row-label">距离到期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${expInfo.days<0?`已过期${Math.abs(expInfo.days)}天`:expInfo.days===0?'今天到期':`${expInfo.days}天后`}</span></div>
   </div>`:''}
   <div class="d-sec">
-    <div class="d-sec-title">存放位置</div>
+    <div class="d-sec-title">物品信息</div>
+    <div class="d-row"><span class="d-row-label">包装类型</span><button type="button" class="package-select" onclick="openPackageTypeSheet('${item.id}')">${packageTypeLabel(item.packageType)} · 修改</button></div>
     <div class="d-row">
       <span class="d-row-label">库存地点</span>
       <div class="location-edit" onclick="openLocationSelectSheet('${item.id}')">
@@ -3150,6 +3193,8 @@ function fillOrderRecognitionResult(item,totalCount){
 
 // 填充表单字段（通用函数）
 function fillFormFields(result){
+  // 包装类型始终由用户填写，每件订单商品独立选择。
+  document.getElementById('fi-package-type').value='';
   const detectedFromName=result.name?detectItem(result.name):null;
   const nameEl=document.getElementById('fi-name');
   const brandEl=document.getElementById('fi-brand');
@@ -3189,6 +3234,13 @@ function cancelScan(){
 
 function confirmAdd(){
   const isManual=document.getElementById('manual-form').style.display!=='none';
+  const packageSelect=document.getElementById(isManual?'mf-package-type':'fi-package-type');
+  const packageType=packageSelect.value;
+  if(!validPackageType(packageType)){
+    showError('请选择包装类型：旅行装、正装或补充装');
+    packageSelect.focus();
+    return;
+  }
   const name=isManual?document.getElementById('mf-name').value:document.getElementById('fi-name').value;
   const brand=isManual?document.getElementById('mf-brand').value:document.getElementById('fi-brand').value;
   const size=parseInt(isManual?document.getElementById('mf-size').value:document.getElementById('fi-size').value)||250;
@@ -3208,7 +3260,7 @@ function confirmAdd(){
   if(startsOpened)logs.push({type:'开封',desc:'录入时标记已开封',delta:0,date:today()});
 
   const newItem={
-    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,
+    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,packageType,
     packageSize:size,unit:finalUnit,activePercent:startsOpened?100:0,openCount:startsOpened?1:0,stockCount:startsOpened?Math.max(0,qty-1):qty,
     dailyUse:d.daily,color:d.color,shape:d.shape,
     expiryDate:exp||null,openedDate:startsOpened?today():null,location:location||null,
@@ -3219,6 +3271,7 @@ function confirmAdd(){
   items.push(newItem);
   const acceptedRecognitionItem={
     itemId:newItem.id,
+    packageType:newItem.packageType,
     source:addSource,
     name:newItem.name,
     brand:newItem.brand,
@@ -3254,6 +3307,8 @@ function confirmAdd(){
   document.getElementById('recog-result').style.display='none';
   document.getElementById('manual-form').style.display='block';
   document.getElementById('mf-name').value='';
+  document.getElementById('mf-package-type').value='';
+  document.getElementById('fi-package-type').value='';
   document.getElementById('mf-detect-badge').innerHTML='';
   document.querySelector('input[name="mf-open-state"][value="stock"]').checked=true;
   document.querySelector('input[name="fi-open-state"][value="stock"]').checked=true;
