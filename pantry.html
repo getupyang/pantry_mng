@@ -478,6 +478,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
 .undo-btn{font-size:var(--f-base);font-family:'DM Mono',monospace;letter-spacing:.06em;color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;transition:background .14s;}
 .undo-btn:hover{background:rgba(255,255,255,.25);}
 .undo-progress{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 10px 10px;background:rgba(255,255,255,.3);transition:width linear;}
+.app-message{position:fixed;top:max(12px,env(safe-area-inset-top));left:16px;right:16px;max-width:540px;margin:auto;z-index:1000;padding:14px 16px;background:var(--surface);color:var(--red);border:1px solid currentColor;border-radius:12px;box-shadow:0 4px 18px var(--shadow2);font-size:var(--f-base);overflow-wrap:anywhere;}
+.cloud-status{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px;background:var(--surface);border-radius:12px;font-size:var(--f-base);line-height:1.5;}
+.cloud-status span{flex:1;min-width:0;}
+.cloud-status button{flex:none;white-space:nowrap;padding:8px 12px;}
+.app-message[hidden],.cloud-status[hidden]{display:none;}
 </style>
 <script src="config.js"></script>
 </head>
@@ -630,6 +635,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
     <div style="width:48px"></div>
   </div>
   <div class="scroll"><div class="add-wrap">
+    <div id="cloud-status" class="cloud-status" role="status">
+      <span id="cloud-status-text">正在连接云端…</span>
+      <button type="button" class="s-btn cancel" id="cloud-retry" onclick="connectCloud()">重试连接</button>
+    </div>
     <div class="add-method" onclick="doScan('photo')">
       <div class="add-icon" style="background:#e8f5ee">📷</div>
       <div><h3>拍照识别</h3><p>拍产品标签，缺少品名或保质期时会提示补拍</p></div>
@@ -714,7 +723,9 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
   <button class="scan-cancel" onclick="cancelScan()">取消</button>
 </div>
 
+<!-- Messages remain visible on every screen. -->
 <!-- deduct toast -->
+<div id="app-message" class="app-message" role="alert" hidden></div>
 <div class="deduct-toast" id="deduct-toast">
   <div class="dt-title">✦ 已更新今日用量</div>
   <div class="dt-body" id="dt-body"></div>
@@ -1105,6 +1116,8 @@ const PANTRY_ATTRIBUTION_KEY='pantry_attribution';
 let pantryFamilyId=localStorage.getItem(PANTRY_FAMILY_ID_KEY)||null;
 let pantryFamilyVersion=parseInt(localStorage.getItem(PANTRY_FAMILY_VERSION_KEY)||'0');
 let cloudReady=false;
+let cloudState='connecting';
+let cloudInitPromise=null;
 let cloudSyncTimer=null;
 function isMockData(data){
   if(!Array.isArray(data))return false;
@@ -1198,13 +1211,60 @@ function applyCloudData(data){
 
 async function ensureFamily(){
   const clientId=getOrCreateClientId();
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),15000);
+  try{
   const resp=await fetch('/api/families/ensure',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({clientId})
+    body:JSON.stringify({clientId}),
+    signal:controller.signal
   });
   if(!resp.ok)throw new Error('初始化云端家庭失败');
   return await resp.json();
+  }finally{clearTimeout(timer);}
+}
+
+function renderCloudStatus(){
+  const panel=document.getElementById('cloud-status');
+  const text=document.getElementById('cloud-status-text');
+  const retry=document.getElementById('cloud-retry');
+  if(!panel||!text||!retry)return;
+  panel.hidden=cloudReady;
+  text.textContent=cloudState==='connecting'?'正在连接云端，连接后可拍照识别…':'云端连接失败，暂时无法识别。请重试连接；手动录入会先保存在本机。';
+  retry.disabled=cloudState==='connecting';
+  retry.textContent=cloudState==='connecting'?'连接中…':'重试连接';
+}
+
+function connectCloud(){
+  if(cloudInitPromise)return cloudInitPromise;
+  cloudState='connecting';
+  renderCloudStatus();
+  cloudInitPromise=(async()=>{
+    try{
+      const data=await ensureFamily();
+      const serverData=data?.data||{items:[],locations:[]};
+      const localHasData=getCurrentPayload().items.length>0;
+      const serverHasData=Array.isArray(serverData.items)&&serverData.items.length>0;
+      setFamilyMeta(data.familyId,data.version||1);
+      if(serverHasData)applyCloudData(serverData);
+      else if(!localHasData)applyCloudData(serverData);
+      cloudReady=true;
+      if(!serverHasData&&localHasData)await pushCloudNow();
+      cloudState='ready';
+      if(activeTab===0)renderDashboard();else renderGallery();
+      updateAlert();
+      trackEvent('app_open',{itemCount:items.length,locationCount:loadLocations().length,serverHasData});
+    }catch(e){
+      cloudReady=false;
+      cloudState='error';
+      console.error('云端连接失败，可重试；本机数据保留',e);
+    }finally{
+      cloudInitPromise=null;
+      renderCloudStatus();
+    }
+  })();
+  return cloudInitPromise;
 }
 
 async function pushCloudNow(){
@@ -1638,15 +1698,14 @@ function addLog(item,type,desc,delta){item.logs.push({type,desc,delta,date:today
 // ═══════════════════════════════════════════════
 //  ALERT BANNER
 // ═══════════════════════════════════════════════
+let appMessageTimer=null;
 function showError(msg){
-  const alert=document.getElementById('alert-banner');
-  if(alert){
-    alert.className='alert red';
-    alert.style.display='flex';
-    const textEl=document.getElementById('alert-text');
-    if(textEl)textEl.textContent=msg;
-    setTimeout(()=>alert.style.display='none',5000);
-  }
+  const message=document.getElementById('app-message');
+  if(!message)return;
+  clearTimeout(appMessageTimer);
+  message.textContent=msg;
+  message.hidden=false;
+  appMessageTimer=setTimeout(()=>{message.hidden=true;},7000);
 }
 
 function updateAlert(){
@@ -2670,6 +2729,14 @@ function normalizeExpiryDate(dateStr){
   let raw=String(dateStr).trim();
   if(!raw||raw==='null'||raw.toLowerCase()==='null')return null;
   raw=raw.replace(/[。．]/g,'.').replace(/\s+/g,' ');
+  // Select the explicitly labelled expiry, never the manufacturing date.
+  const expiryLabel=raw.match(/\b(?:EXP(?:IRY|IRATION)?|BEST\s+BEFORE|USE\s+BY)\b[.：:\s]*|(?:有效期至|限期使用日期|使用期限|到期日期)[：:\s]*/i);
+  if(expiryLabel){
+    raw=raw.slice(expiryLabel.index+expiryLabel[0].length).split(/\b(?:MFG|MFD|MANUFACTURED)\b|生产日期|制造日期/i)[0];
+  }else if(/\b(?:MFG|MFD|MANUFACTURED)\b|生产日期|制造日期/i.test(raw)){
+    return null;
+  }
+
 
   function toFullYear(year){
     year=parseInt(year,10);
@@ -2731,8 +2798,14 @@ function postProcessRecognitionResult(result){
   parsed.unit=normalizeRecognitionUnit(parsed.unit);
   parsed.qty=Math.max(1,parseInt(parsed.qty,10)||1);
 
-  const evidenceDate=parsed.expiryEvidence?normalizeExpiryDate(parsed.expiryEvidence):null;
-  parsed.expiryDate=evidenceDate||normalizeExpiryDate(parsed.expiryDate);
+  const evidence=String(parsed.expiryEvidence||'');
+  const explicitExpiry=/\b(?:EXP(?:IRY|IRATION)?|BEST\s+BEFORE|USE\s+BY)\b|有效期至|限期使用日期|使用期限|到期日期/i.test(evidence);
+  const modelDate=normalizeExpiryDate(parsed.expiryDate);
+  const evidenceDate=explicitExpiry?normalizeExpiryDate(evidence):null;
+  parsed.expiryDate=evidenceDate||modelDate;
+  if(!parsed.expiryDate&&/^(?:\d{4}[-/.]\d{1,2}(?:[-/.]\d{1,2})?|\d{1,2}[-/.]\d{2,4}|\d{2,4}年\d{1,2}月(?:\d{1,2}日)?)$/.test(evidence.trim())){
+    parsed.expiryDate=normalizeExpiryDate(evidence);
+  }
 
   const missing=new Set(Array.isArray(parsed.missingFields)?parsed.missingFields:[]);
   if(!parsed.name)missing.add('name');
@@ -3019,7 +3092,8 @@ function createFileInput(type,callback){
 
 function doScan(type){
   if(!cloudReady||!pantryFamilyId){
-    showError('云端初始化中，请稍后再试');
+    renderCloudStatus();
+    showError(cloudState==='connecting'?'正在连接云端，请稍后再点拍照识别':'云端连接失败，请点击「重试连接」');
     return;
   }
   if(!hasRecognitionReviewConsent()){
@@ -3326,7 +3400,7 @@ function nav(id){
         if(rf)rf.style.display='none';
         if(mf)mf.style.display='block';
       }else if(ik==='photo'||ik==='order'){
-        setTimeout(()=>doScan(ik),280);
+        doScan(ik);
       }
     }
   }
@@ -3407,30 +3481,9 @@ document.getElementById('today-str').textContent=
 switchTab(0);
 updateAlert();
 
-// 云端初始化（v1：浏览器级家庭）
-ensureFamily().then(data=>{
-  const serverData=data?.data||{items:[],locations:[]};
-  const localPayload=getCurrentPayload();
-  const serverItems=Array.isArray(serverData.items)?serverData.items:[];
-  const localHasData=Array.isArray(localPayload.items)&&localPayload.items.length>0;
-  const serverHasData=serverItems.length>0;
-  setFamilyMeta(data.familyId,data.version||1);
-  if(serverHasData){
-    applyCloudData(serverData);
-  }else if(localHasData){
-    // 若服务端为空但本地已有数据，首次上云
-    pushCloudNow().catch(e=>console.error('首次上云失败',e));
-  }else{
-    applyCloudData(serverData);
-  }
-  cloudReady=true;
-  if(activeTab===0)renderDashboard();else renderGallery();
-  updateAlert();
-  trackEvent('app_open',{itemCount:items.length,locationCount:loadLocations().length,serverHasData});
-}).catch(e=>{
-  console.error('云端初始化失败，回退本地模式',e);
-  cloudReady=false;
-});
+// 云端恢复后可重试，不需要清除本机数据。
+connectCloud();
+window.addEventListener('online',()=>{if(!cloudReady)connectCloud();});
 
 setTimeout(()=>{
   const key='pantry_deduct_v4';
