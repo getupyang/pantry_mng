@@ -5,14 +5,16 @@ const fs=require('node:fs/promises');
 const assert=require('node:assert/strict');
 (async()=>{
   if(!process.argv[2])throw new Error('Image path required');
-  const browser=await chromium.launch({headless:true});
+  const baseURL=process.env.PANTRY_BASE_URL||'http://127.0.0.1:8031';
+  const proxy=baseURL.startsWith('https:')&&process.env.HTTPS_PROXY?{server:process.env.HTTPS_PROXY}:undefined;
+  const browser=await chromium.launch({headless:true,proxy});
   try{
     const page=await browser.newPage({viewport:{width:390,height:844}});
     const errors=[],responses=[];
     page.on('pageerror',e=>errors.push(e.message));
     page.on('response',r=>{if(r.url().includes('/api/'))responses.push({path:new URL(r.url()).pathname,status:r.status()});});
     await page.route('https://fonts.googleapis.com/**',r=>r.abort());
-    await page.goto('http://127.0.0.1:8031/pantry.html?from=codex-live-test');
+    await page.goto(baseURL+'/pantry.html?from=codex-live-test');
     await page.waitForFunction(()=>cloudReady,{},{timeout:60000});
     console.log('Cloud initialized in isolated browser');
     await page.evaluate(()=>nav('scr-add'));
