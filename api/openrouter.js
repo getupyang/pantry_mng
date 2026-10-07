@@ -10,12 +10,12 @@ const ALLOWED_MODELS = new Set([
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const MAX_BODY_BYTES = 7 * 1024 * 1024;
 const MAX_TOKENS = 2200;
-const LIMITS = {
-  clientHour: 12,
-  clientDay: 40,
-  familyDay: 100,
-  ipHour: 30,
-  ipDay: 80,
+export const LIMITS = {
+  clientHour: 30,
+  clientDay: 120,
+  familyDay: 300,
+  ipHour: 90,
+  ipDay: 240,
 };
 
 function getHeader(req, name) {
