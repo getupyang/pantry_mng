@@ -692,7 +692,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
         <span class="form-hd-t">AI 识别结果</span><span class="form-conf">置信度 96%</span>
       </div>
       <div id="detected-cat-badge"></div>
-      <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™"></div>
+      <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™" oninput="autoDetectRecognized(this.value)"></div>
+      <div class="frow"><label class="flabel" for="fi-category">分类</label><select class="package-select" id="fi-category"></select></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit" id="fi-unit">ml</span></div>
       <div class="frow"><label class="flabel" for="fi-package-type">包装类型</label><select class="package-select" id="fi-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
@@ -708,6 +709,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
     </div>
     <div class="form-card" id="manual-form">
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="mf-name" placeholder="如：洗发水、牙膏…" oninput="autoDetect(this.value)"></div>
+      <div class="frow"><label class="flabel" for="mf-category">分类</label><select class="package-select" id="mf-category"></select></div>
       <div id="mf-detect-badge"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><span class="funit" id="mf-unit">ml</span></div>
@@ -1070,6 +1072,7 @@ const DETECT_MAP=[
   {kw:['卫生纸','手纸','厕纸'],cat:'纸品',shape:'tissueBox',unit:'卷',daily:0.5,color:['#ece4d4','#b08c60','#68482e']},
   {kw:['洗手液','皂液'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:5,color:['#d8ecd8','#489048','#185818']},
 ];
+const ITEM_CATEGORIES=[...new Set([...DETECT_MAP.map(rule=>rule.cat),'其他'])];
 
 function detectItem(name){
   if(!name||name.length<2) return null;
@@ -1082,8 +1085,26 @@ function detectItem(name){
 }
 
 let _lastDetected=null;
+function populateCategorySelects(){
+  const options=ITEM_CATEGORIES.map(cat=>`<option value="${cat}">${cat}</option>`).join('');
+  ['fi-category','mf-category'].forEach(id=>{
+    const select=document.getElementById(id);
+    if(select){
+      select.innerHTML=options;
+      select.value='其他';
+    }
+  });
+}
+
+function suggestCategory(name,selectId){
+  const d=detectItem(name);
+  const select=document.getElementById(selectId);
+  if(select)select.value=d?.cat||'其他';
+  return d;
+}
+
 window.autoDetect=function(val){
-  const d=detectItem(val);
+  const d=suggestCategory(val,'mf-category');
   _lastDetected=d;
   const badge=document.getElementById('mf-detect-badge');
   const unitEl=document.getElementById('mf-unit');
@@ -1091,6 +1112,19 @@ window.autoDetect=function(val){
     badge.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${d.shape==='generic'?'通用':shapeName(d.shape)} · ${d.unit}/天 默认消耗 ${d.daily}</div>`;
     if(unitEl) unitEl.textContent=d.unit;
   } else if(badge){
+    badge.innerHTML='';
+  }
+};
+
+window.autoDetectRecognized=function(val){
+  const d=suggestCategory(val,'fi-category');
+  _lastDetected=d;
+  const badge=document.getElementById('detected-cat-badge');
+  const unitEl=document.getElementById('fi-unit');
+  if(d&&badge){
+    badge.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${shapeName(d.shape)}</div>`;
+    if(unitEl)unitEl.textContent=d.unit;
+  }else if(badge){
     badge.innerHTML='';
   }
 };
@@ -3270,6 +3304,8 @@ function fillFormFields(result){
   // 包装类型始终由用户填写，每件订单商品独立选择。
   document.getElementById('fi-package-type').value='';
   const detectedFromName=result.name?detectItem(result.name):null;
+  suggestCategory(result.name||'','fi-category');
+  _lastDetected=detectedFromName;
   const nameEl=document.getElementById('fi-name');
   const brandEl=document.getElementById('fi-brand');
   const sizeEl=document.getElementById('fi-size');
@@ -3277,7 +3313,6 @@ function fillFormFields(result){
   const expEl=document.getElementById('fi-exp');
   if(nameEl){
     nameEl.value=result.name||'';
-    if(result.name)autoDetect(result.name);
   }
   if(brandEl)brandEl.value=result.brand||'';
   if(sizeEl)sizeEl.value=result.packageSize||'';
@@ -3309,6 +3344,8 @@ function cancelScan(){
 function confirmAdd(){
   const isManual=document.getElementById('manual-form').style.display!=='none';
   const packageSelect=document.getElementById(isManual?'mf-package-type':'fi-package-type');
+  const categorySelect=document.getElementById(isManual?'mf-category':'fi-category');
+  const finalCategory=categorySelect.value;
   const packageType=packageSelect.value;
   if(!validPackageType(packageType)){
     showError('请选择包装类型：旅行装、正装或补充装');
@@ -3334,7 +3371,7 @@ function confirmAdd(){
   if(startsOpened)logs.push({type:'开封',desc:'录入时标记已开封',delta:0,date:today()});
 
   const newItem={
-    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:d.cat,packageType,
+    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:finalCategory,packageType,
     packageSize:size,unit:finalUnit,activePercent:startsOpened?100:0,openCount:startsOpened?1:0,stockCount:startsOpened?Math.max(0,qty-1):qty,
     dailyUse:d.daily,color:d.color,shape:d.shape,
     expiryDate:exp||null,openedDate:startsOpened?today():null,location:location||null,
@@ -3358,7 +3395,7 @@ function confirmAdd(){
     cat:newItem.cat
   };
   if(!isManual)recordRecognitionAccepted(acceptedRecognitionItem,addSource);
-  trackEvent('item_add',{source:addSource,reviewId:_currentRecognitionReviewId,qty,startsOpened,cat:d.cat,hasExpiry:!!exp,hasLocation:!!location});
+  trackEvent('item_add',{source:addSource,reviewId:_currentRecognitionReviewId,qty,startsOpened,cat:newItem.cat,hasExpiry:!!exp,hasLocation:!!location});
   save();
   
   // 检查是否是订单识别的批量录入
@@ -3383,6 +3420,8 @@ function confirmAdd(){
   document.getElementById('mf-name').value='';
   document.getElementById('mf-package-type').value='';
   document.getElementById('fi-package-type').value='';
+  document.getElementById('mf-category').value='其他';
+  document.getElementById('fi-category').value='其他';
   document.getElementById('mf-detect-badge').innerHTML='';
   document.querySelector('input[name="mf-open-state"][value="stock"]').checked=true;
   document.querySelector('input[name="fi-open-state"][value="stock"]').checked=true;
@@ -3524,6 +3563,7 @@ document.addEventListener('touchmove',e=>{
 //  INIT
 // ═══════════════════════════════════════════════
 // 应用字号设置
+populateCategorySelects();
 applyFontSize(loadFontSize());
 ensureExpiryInputsVisible();
 captureAttribution();
