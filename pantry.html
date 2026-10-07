@@ -3474,6 +3474,7 @@ async function recognizeOrder(imageFile,options={}){
   const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout*2;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
+  let responseReviewId=null;
   try{
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
@@ -3487,6 +3488,7 @@ async function recognizeOrder(imageFile,options={}){
       throw new Error(errorData.error?.message||`API 错误: ${response.status}`);
     }
     const result=await response.json();
+    responseReviewId=typeof result.pantryReviewId==='string'?result.pantryReviewId.slice(0,200):null;
     let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
     if(jsonStr.startsWith('```')){
       const lines=jsonStr.split('\n');
@@ -3497,10 +3499,13 @@ async function recognizeOrder(imageFile,options={}){
     const parsedItems=JSON.parse(jsonStr);
     const list=Array.isArray(parsedItems)?parsedItems:[parsedItems];
     const parsedList=list.map(item=>postProcessRecognitionResult(item));
-    Object.defineProperty(parsedList,'_recognitionReviewId',{value:result.pantryReviewId||null,enumerable:false});
+    Object.defineProperty(parsedList,'_recognitionReviewId',{value:responseReviewId,enumerable:false});
     return parsedList;
   }catch(e){
     clearTimeout(timeoutId);
+    if(responseReviewId&&e&&typeof e==='object'){
+      Object.defineProperty(e,'_recognitionReviewId',{value:responseReviewId,enumerable:false});
+    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -3616,7 +3621,15 @@ async function startOrderRecognition(file){
         throw new Error('订单识别结果为空，请重试或手动输入');
       }
     }catch(err){
-      if(!isRecognitionAttemptCurrent(attempt))return;
+      const errorReviewId=err?._recognitionReviewId||null;
+      if(!isRecognitionAttemptCurrent(attempt)){
+        if(errorReviewId){
+          updateRecognitionReviewFor(errorReviewId,{outcome:'discarded'});
+          trackEvent('recognition_discard',{reqType:'order',reviewId:errorReviewId});
+        }
+        return;
+      }
+      if(errorReviewId)updateRecognitionReviewFor(errorReviewId,{outcome:'error'});
       console.error('识别失败',err);
       clearInterval(_scanTmr);
       document.getElementById('scan-ov').classList.remove('show');

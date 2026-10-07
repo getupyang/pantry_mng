@@ -90,7 +90,13 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
           pantryReviewId: reviewId,
           choices: [{ message: { content: mode === 'empty' ? '' : 'not valid recognition output' } }]
         };
-        const response = mode === 'conflict'
+        const malformedOrder = {
+          pantryReviewId: reviewId,
+          choices: [{ message: { content: '{ malformed order json' } }]
+        };
+        const response = mode === 'order_malformed'
+          ? malformedOrder
+          : mode === 'conflict'
           ? conflict
           : (mode === 'parse' || mode === 'empty') ? parseFailure : success;
         return new Promise(resolve => setTimeout(resolve, plan.delayMs || 0)).then(() => route.fulfill({
@@ -701,6 +707,60 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       controlsEnabled: ['photo-intake-entry','intake-mode-single','intake-mode-multi','order-intake-entry'].every(id => !document.getElementById(id).disabled)
     })), { overlay: 'scan-ov', timer: null, busy: false, orderItems: null, controlsEnabled: true }, 'leaving during pending order clears overlay, timer, state, and locks');
     await page.evaluate(() => window.__abandonOrderPromise);
+
+    recognitionQueue.push({ mode: 'order_malformed', type: 'order', delayMs: 0, reviewId: 'review-order-parse-error' });
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await startOrderRecognition(new File([bytes], 'order-malformed.png', { type: 'image/png' }));
+    }, png.toString('base64'));
+    await page.waitForTimeout(30);
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-order-parse-error' && update.outcome === 'error'), true, 'current malformed order marks its exact review as error');
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      reviewType: _currentRecognitionReviewType,
+      parsed: _currentRecognitionParsedResult,
+      orderItems: window._orderItems ?? null,
+      activeAttempt: activeRecognitionAttempt,
+      formVisible: document.getElementById('recog-result').style.display === 'block'
+    })), { reviewId: null, reviewType: null, parsed: null, orderItems: null, activeAttempt: null, formVisible: false }, 'malformed order never commits successful or batch state');
+
+    await page.evaluate(() => {
+      window.__malformedOriginalFetch = window.fetch;
+      window.__malformedIgnoreSignalOnce = true;
+      window.fetch = (url, options = {}) => {
+        if (window.__malformedIgnoreSignalOnce && String(url).includes('/api/openrouter')) {
+          window.__malformedIgnoreSignalOnce = false;
+          const { signal, ...withoutSignal } = options;
+          return window.__malformedOriginalFetch(url, withoutSignal);
+        }
+        return window.__malformedOriginalFetch(url, options);
+      };
+    });
+    recognitionQueue.push({ mode: 'order_malformed', type: 'order', delayMs: 250, reviewId: 'review-order-parse-stale' });
+    await page.evaluate(encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      window.__malformedOrderPromise = startOrderRecognition(new File([bytes], 'order-malformed-stale.png', { type: 'image/png' }));
+    }, png.toString('base64'));
+    await page.waitForFunction(() => orderRecognitionBusy === true);
+    await page.evaluate(() => cancelScan());
+    await page.evaluate(() => setIntakeMode('single'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'newer-after-malformed.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 0, reviewId: 'review-newer-after-malformed', name: '较新的照片结果' });
+    await page.evaluate(() => startPendingPhotoRecognition());
+    await page.evaluate(() => window.__malformedOrderPromise);
+    await page.evaluate(() => { window.fetch = window.__malformedOriginalFetch; });
+    await page.waitForTimeout(30);
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-order-parse-stale' && update.outcome === 'discarded'), true, 'stale malformed order discards only its exact review');
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      reviewType: _currentRecognitionReviewType,
+      name: document.getElementById('fi-name').value,
+      orderItems: window._orderItems ?? null
+    })), { reviewId: 'review-newer-after-malformed', reviewType: 'photo', name: '较新的照片结果', orderItems: null }, 'stale malformed order cannot corrupt the newer photo review');
+    await page.evaluate(() => nav('scr-home'));
 
     await page.waitForTimeout(100);
     const photoEvents = usageEvents.filter(event => ['scan_start', 'scan_success', 'scan_error'].includes(event.eventName));
