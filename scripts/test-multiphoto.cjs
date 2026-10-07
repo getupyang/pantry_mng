@@ -25,6 +25,7 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     const reviewUpdates = [];
     let recognitionMode = 'success';
     let recognitionDelayMs = 0;
+    const recognitionQueue = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
       localStorage.setItem('pantry_deduct_v4', String(Date.now()));
@@ -53,13 +54,16 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       if (url.pathname === '/api/openrouter') {
         recognitionCalls += 1;
         recognitionBodies.push(JSON.parse(route.request().postData() || '{}'));
-        if (recognitionMode === 'network') return route.abort('failed');
+        const plan = recognitionQueue.shift() || { mode: recognitionMode, delayMs: recognitionDelayMs };
+        const mode = plan.mode || 'success';
+        const reviewId = plan.reviewId || `review-${recognitionCalls}`;
+        if (mode === 'network') return route.abort('failed');
         const success = {
-          pantryReviewId: `review-${recognitionCalls}`,
+          pantryReviewId: reviewId,
           choices: [{ message: { content: JSON.stringify({
             sameProduct: true,
             conflictReason: '',
-            name: '测试洗发水',
+            name: plan.name || '测试洗发水',
             brand: '测试品牌',
             packageSize: 300,
             unit: 'ml',
@@ -70,20 +74,20 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
           }) } }]
         };
         const conflict = {
-          pantryReviewId: `review-${recognitionCalls}`,
+          pantryReviewId: reviewId,
           choices: [{ message: { content: 'sameProduct： "false"\nconflictReason：照片中是不同商品' } }]
         };
         const parseFailure = {
-          pantryReviewId: `review-${recognitionCalls}`,
-          choices: [{ message: { content: recognitionMode === 'empty' ? '' : 'not valid recognition output' } }]
+          pantryReviewId: reviewId,
+          choices: [{ message: { content: mode === 'empty' ? '' : 'not valid recognition output' } }]
         };
-        const response = recognitionMode === 'conflict'
+        const response = mode === 'conflict'
           ? conflict
-          : (recognitionMode === 'parse' || recognitionMode === 'empty') ? parseFailure : success;
-        return new Promise(resolve => setTimeout(resolve, recognitionDelayMs)).then(() => route.fulfill({
-          status: recognitionMode === 'server' ? 503 : 200,
+          : (mode === 'parse' || mode === 'empty') ? parseFailure : success;
+        return new Promise(resolve => setTimeout(resolve, plan.delayMs || 0)).then(() => route.fulfill({
+          status: mode === 'server' ? 503 : 200,
           contentType: 'application/json',
-          body: recognitionMode === 'server' ? JSON.stringify({ error: { message: 'service unavailable' } }) : JSON.stringify(response)
+          body: mode === 'server' ? JSON.stringify({ error: { message: 'service unavailable' } }) : JSON.stringify(response)
         }));
       }
       if (url.pathname === '/api/usage-event') {
@@ -349,6 +353,18 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(await page.locator('#add-pending-photo').isDisabled(), true, 'add is locked while recognition is pending');
     assert.equal(await page.locator('#start-photo-recognition').isDisabled(), true, 'start is locked while recognition is pending');
     assert.equal(await page.locator('.pending-photo-remove:not([disabled])').count(), 0, 'remove controls are locked while recognition is pending');
+    for (const selector of ['#photo-intake-entry', '#intake-mode-single', '#intake-mode-multi', '#order-intake-entry']) {
+      assert.equal(await page.locator(selector).isDisabled(), true, `${selector} is locked while recognition is pending`);
+    }
+    assert.deepEqual(await page.evaluate(() => {
+      let chooserCalls = 0;
+      const originalCreateFileInput = createFileInput;
+      createFileInput = () => { chooserCalls += 1; };
+      setIntakeMode('multi');
+      doScan('order');
+      createFileInput = originalCreateFileInput;
+      return { chooserCalls, single: document.getElementById('intake-mode-single').getAttribute('aria-pressed') };
+    }), { chooserCalls: 0, single: 'true' }, 'programmatic competing intake paths are guarded while pending');
     await page.waitForFunction(() => photoRecognitionBusy === false);
     assert.equal(recognitionCalls, 1, 'double start produces one request');
     const imageEntries = recognitionBodies[0].messages[0].content.filter(entry => entry.type === 'image_url');
@@ -362,11 +378,29 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(await page.locator('.pending-photo').count(), 2, 'successful review keeps the thumbnail strip visible');
     assert.equal(await page.locator('.pending-photo-remove:not([disabled])').count(), 0, 'review thumbnails are read-only');
     assert.equal(await page.locator('#reselect-pending-photos').isVisible(), true, 'review offers reselect');
+    for (const selector of ['#photo-intake-entry', '#intake-mode-single', '#intake-mode-multi', '#order-intake-entry']) {
+      assert.equal(await page.locator(selector).isDisabled(), true, `${selector} is locked during read-only review`);
+    }
+    assert.deepEqual(await page.evaluate(() => {
+      cloudReady = true;
+      pantryFamilyId = 'test-family';
+      let chooserCalls = 0;
+      const reviewId = _currentRecognitionReviewId;
+      const originalCreateFileInput = createFileInput;
+      createFileInput = () => { chooserCalls += 1; };
+      setIntakeMode('multi');
+      doScan('order');
+      createFileInput = originalCreateFileInput;
+      return { chooserCalls, reviewId, currentReviewId: _currentRecognitionReviewId, single: document.getElementById('intake-mode-single').getAttribute('aria-pressed') };
+    }), { chooserCalls: 0, reviewId: 'review-1', currentReviewId: 'review-1', single: 'true' }, 'read-only review cannot be overwritten by another intake path');
 
     await page.evaluate(() => reselectPendingPhotos());
     assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'reselect discards the current photo group');
     assert.equal(await page.locator('#recog-result').isHidden(), true);
     assert.equal(await page.locator('#add-pending-photo').isVisible(), true, 'reselect returns to editable collection');
+    for (const selector of ['#photo-intake-entry', '#intake-mode-single', '#intake-mode-multi', '#order-intake-entry']) {
+      assert.equal(await page.locator(selector).isDisabled(), false, `${selector} is restored after reselect`);
+    }
     await page.waitForTimeout(30);
     assert.equal(reviewUpdates.some(update => update.reviewId === 'review-1' && update.outcome === 'discarded'), true, 'reselect marks an unaccepted review discarded');
 
@@ -423,6 +457,9 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     const acceptedReview = reviewUpdates.find(update => update.outcome === 'accepted');
     assert.equal(Boolean(acceptedReview), true, 'accepted save records accepted review data');
     assert.equal(reviewUpdates.some(update => update.reviewId === acceptedReview.reviewId && update.outcome === 'discarded'), false, 'accepted review is not later discarded');
+    for (const selector of ['#photo-intake-entry', '#intake-mode-single', '#intake-mode-multi', '#order-intake-entry']) {
+      assert.equal(await page.locator(selector).isDisabled(), false, `${selector} is restored after accepted save`);
+    }
 
     await page.evaluate(() => nav('scr-add'));
     await page.evaluate(async encoded => {
@@ -433,6 +470,44 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.evaluate(() => nav('scr-home'));
     assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'abandoning intake clears pending photos');
     assert.equal(await page.evaluate(url => window.__revokedObjectUrls.includes(url), abandonUrl), true, 'abandoning intake revokes its preview');
+    for (const selector of ['#photo-intake-entry', '#intake-mode-single', '#intake-mode-multi', '#order-intake-entry']) {
+      assert.equal(await page.locator(selector).isDisabled(), false, `${selector} is restored after abandonment`);
+    }
+
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'race-a.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 250, reviewId: 'review-race-a', name: '延迟商品A' });
+    await page.evaluate(() => { window.__scanAPromise = startPendingPhotoRecognition(); });
+    await page.waitForFunction(() => photoRecognitionBusy === true);
+    await page.evaluate(() => nav('scr-home'));
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'race-b.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 0, reviewId: 'review-race-b', name: '新商品B' });
+    await page.evaluate(() => startPendingPhotoRecognition());
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      name: _currentRecognitionParsedResult?.name,
+      fieldName: document.getElementById('fi-name').value
+    })), { reviewId: 'review-race-b', name: '新商品B', fieldName: '新商品B' }, 'fresh scan B owns the active review before A resolves');
+    await page.evaluate(() => window.__scanAPromise);
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      name: _currentRecognitionParsedResult?.name,
+      fieldName: document.getElementById('fi-name').value
+    })), { reviewId: 'review-race-b', name: '新商品B', fieldName: '新商品B' }, 'stale scan A cannot overwrite or reset scan B globals');
+    await page.waitForTimeout(30);
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-race-a' && update.outcome === 'discarded'), true, 'stale scan A discards only its own review');
+    await page.locator('#fi-package-type').selectOption('regular');
+    await page.getByRole('button', { name: '确认录入 →' }).click();
+    await page.waitForTimeout(30);
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-race-b' && update.outcome === 'accepted'), true, 'saving B accepts B review');
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-race-b' && update.outcome === 'discarded'), false, 'stale A never discards B review');
 
     await page.waitForTimeout(100);
     const photoEvents = usageEvents.filter(event => ['scan_start', 'scan_success', 'scan_error'].includes(event.eventName));

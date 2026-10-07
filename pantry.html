@@ -2614,6 +2614,7 @@ let pendingPhotoSelectionMode='single';
 let _lastPhotoRecognitionEncodedBytes=0;
 
 function setIntakeMode(mode){
+  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
   const next=mode==='multi'?'multi':'single';
   const singleButton=document.getElementById('intake-mode-single');
   const multiButton=document.getElementById('intake-mode-multi');
@@ -2699,6 +2700,14 @@ function renderPendingPhotos(){
   const startButton=document.getElementById('start-photo-recognition');
   const reselectButton=document.getElementById('reselect-pending-photos');
   if(!grid||!status||!error||!addButton||!startButton||!reselectButton)return;
+  const intakeControls=[
+    document.getElementById('photo-intake-entry'),
+    document.getElementById('intake-mode-single'),
+    document.getElementById('intake-mode-multi'),
+    document.getElementById('order-intake-entry')
+  ].filter(Boolean);
+  const intakeLocked=photoRecognitionBusy||pendingPhotoReviewActive;
+  intakeControls.forEach(control=>{control.disabled=intakeLocked;});
   grid.replaceChildren();
   pendingPhotos.forEach(photo=>{
     const item=document.createElement('div');
@@ -2711,7 +2720,7 @@ function renderPendingPhotos(){
     remove.className='pending-photo-remove';
     remove.setAttribute('aria-label',`移除照片 ${photo.file.name}`);
     remove.textContent='×';
-    remove.disabled=photoRecognitionBusy||pendingPhotoReviewActive;
+    remove.disabled=intakeLocked;
     remove.addEventListener('click',()=>removePendingPhoto(photo.id));
     item.append(image,remove);
     grid.appendChild(item);
@@ -2785,10 +2794,19 @@ async function startPendingPhotoRecognition(){
   trackEvent('scan_start',{reqType:'photo',imageCount,fileSize,selectionMode:pendingPhotoSelectionMode});
   try{
     const result=await recognizePhoto(files);
+    const responseReviewId=result?._recognitionReviewId||null;
     if(generation!==pendingPhotoGeneration){
-      clearPendingRecognitionReview();
+      if(responseReviewId){
+        updateRecognitionReviewFor(responseReviewId,{outcome:'discarded'});
+        trackEvent('recognition_discard',{reqType:'photo',reviewId:responseReviewId});
+      }
       return;
     }
+    _currentRecognitionReviewId=responseReviewId;
+    _currentRecognitionReviewType='photo';
+    _currentRecognitionParsedResult=result;
+    _acceptedRecognitionItems=[];
+    if(responseReviewId)updateRecognitionReviewFor(responseReviewId,{parsedResult:result,outcome:'recognized'});
     if(result?.sameProduct===false){
       const reason=result.conflictReason||'照片可能不是同一件商品';
       pendingPhotoMessage=`${reason}。请移除无关照片后重试。`;
@@ -2806,7 +2824,7 @@ async function startPendingPhotoRecognition(){
       reviewId:_currentRecognitionReviewId,
       count:1,
       imageCount,
-      encodedBytes:_lastPhotoRecognitionEncodedBytes
+      encodedBytes:result._recognitionEncodedBytes||_lastPhotoRecognitionEncodedBytes
     });
   }catch(err){
     if(generation!==pendingPhotoGeneration)return;
@@ -2895,10 +2913,10 @@ function getCurrentParsedRecognitionItem(source){
   return _currentRecognitionParsedResult&&!Array.isArray(_currentRecognitionParsedResult)?_currentRecognitionParsedResult:null;
 }
 
-function updateRecognitionReview(payload){
-  if(!_currentRecognitionReviewId||!pantryFamilyId)return Promise.resolve();
+function updateRecognitionReviewFor(reviewId,payload){
+  if(!reviewId||!pantryFamilyId)return Promise.resolve();
   const body={
-    reviewId:_currentRecognitionReviewId,
+    reviewId,
     familyId:pantryFamilyId,
     clientId:getOrCreateClientId(),
     ...payload
@@ -2908,6 +2926,10 @@ function updateRecognitionReview(payload){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)
   }).catch(e=>console.debug('识别样本回传失败',e));
+}
+
+function updateRecognitionReview(payload){
+  return updateRecognitionReviewFor(_currentRecognitionReviewId,payload);
 }
 
 function recordRecognitionAccepted(accepted,source){
@@ -3303,7 +3325,8 @@ async function recognizePhoto(imageFiles){
 - 如果图片存在商品冲突，必须返回 sameProduct:false 和具体 conflictReason；其他商品字段使用空字符串、0 或 null，不得把不同商品的信息合成一条
 - 如果某个字段无法识别，使用空字符串、0 或 null，不要编造`;
   const requestBody=buildVisionRequest(prompt,base64Urls,700);
-  _lastPhotoRecognitionEncodedBytes=new TextEncoder().encode(JSON.stringify(requestBody)).byteLength;
+  const encodedBytes=new TextEncoder().encode(JSON.stringify(requestBody)).byteLength;
+  _lastPhotoRecognitionEncodedBytes=encodedBytes;
   if(!isVisionRequestWithinBudget(requestBody)){
     throw new Error('图片合计数据过大，超过识别请求限制。请减少照片数量或选择更小的图片后重试。');
   }
@@ -3324,20 +3347,14 @@ async function recognizePhoto(imageFiles){
       throw new Error(errorData.error?.message||`API 错误: ${response.status} ${response.statusText}`);
     }
     const result=await response.json();
-    _currentRecognitionReviewId=result.pantryReviewId||null;
-    _currentRecognitionReviewType='photo';
     const parsed=parseRecognitionResult(result);
-    _currentRecognitionParsedResult=parsed;
-    _acceptedRecognitionItems=[];
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({parsedResult:parsed,outcome:'recognized'});
-    }
+    Object.defineProperties(parsed,{
+      _recognitionReviewId:{value:result.pantryReviewId||null,enumerable:false},
+      _recognitionEncodedBytes:{value:encodedBytes,enumerable:false}
+    });
     return parsed;
   }catch(e){
     clearTimeout(timeoutId);
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({outcome:'error'});
-    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -3447,6 +3464,10 @@ function createFileInput(type,callback){
 }
 
 function doScan(type){
+  if(photoRecognitionBusy||pendingPhotoReviewActive){
+    showError(photoRecognitionBusy?'照片正在识别，请稍候':'请先确认当前识别结果，或重新选择照片');
+    return;
+  }
   if(type==='photo'){
     if(!hasRecognitionReviewConsent()){
       ensureRecognitionReviewConsent(()=>doScan(type));
