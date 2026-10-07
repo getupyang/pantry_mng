@@ -2845,6 +2845,17 @@ function normalizeRecognitionUnit(unit){
 
 function postProcessRecognitionResult(result){
   const parsed=result&&typeof result==='object'?result:{};
+  const hasSameProduct=Object.prototype.hasOwnProperty.call(parsed,'sameProduct');
+  if(!hasSameProduct){
+    parsed.sameProduct=true;
+  }else if(typeof parsed.sameProduct==='string'){
+    const normalizedSameProduct=parsed.sameProduct.trim().toLowerCase();
+    if(normalizedSameProduct==='true')parsed.sameProduct=true;
+    else parsed.sameProduct=false;
+  }else if(typeof parsed.sameProduct!=='boolean'){
+    parsed.sameProduct=false;
+  }
+  parsed.conflictReason=String(parsed.conflictReason??'').trim().slice(0,500);
   parsed.name=String(parsed.name||'').trim();
   parsed.brand=String(parsed.brand||'').trim();
   parsed.packageSize=parseFloat(parsed.packageSize)||0;
@@ -2943,8 +2954,11 @@ function getVisionModels(){
 }
 
 function buildVisionRequest(prompt,base64Urls,maxTokens){
-  if(!Array.isArray(base64Urls)||base64Urls.length===0){
-    throw new TypeError('Vision request requires at least one image URL');
+  const validImageUrls=Array.isArray(base64Urls)&&
+    base64Urls.length>=1&&base64Urls.length<=3&&
+    base64Urls.every(url=>typeof url==='string'&&/^data:image\/[^;,]+;base64,.+$/.test(url));
+  if(!validImageUrls){
+    throw new TypeError('Vision request requires one to three non-empty image data URLs');
   }
   const models=getVisionModels();
   const body={
