@@ -90,9 +90,12 @@ git diff --check
   - `node --test scripts/test-multiphoto-api.mjs scripts/test-multiphoto-request.cjs scripts/test-photo-live-args.cjs scripts/test-intake.cjs scripts/test-ios-expiry.cjs`：47/47 通过；
   - `scripts/test-multiphoto.cjs`：通过收集、明确开始、重试/冲突、review 生命周期、analytics 与清理。
 - 合并验证阶段没有调用真实模型或写入云库存；浏览器测试均使用 mock API。
+- 合并版本于 2026-10-07 23:36（KST）重新部署到正式环境：`dpl_61CrKtnHco41F4JBLGiErRb7zRPw`，`vercel inspect pantry-mng.vercel.app` 显示 `target=production`、`status=Ready`，正式别名已指向该部署。
+- 合并版本线上 `pantry.html` 与本地文件 SHA-256 均为 `0e23e760a88bb0235e97a738ae6fd15876a69f19817e2ca3bded0bd4b52aa0b1`；源码同时包含多图收集入口、“开始识别”按钮及 `mf-category` / `fi-category` 分类选择器。
+- 在正式域名运行分类编辑浏览器回归与多图识别 UI 回归均通过；两项线上回归均拦截 API，没有调用真实模型或写入云库存。
 
 ### 适用范围与状态
 
 本文记录适用于当前单 HTML 实现、当前 `DETECT_MAP` 分类来源、现有 `items` JSON 中的 `cat` 字段，以及当前浏览器加载方式。若添加表单、分类映射、同步数据结构、浏览器版本或部署版本变化，本文命令与结论可能过时，需要重新核对。
 
-当前状态：分类功能曾成功部署，但随后被多图分支的正式部署覆盖；合并版本已在本地通过相关回归，等待重新推送和部署。本文不包含私有库存、截图、密钥、token 或凭据。
+当前状态：分类功能与当前生产多图功能已经合并，功能分支已推送 GitHub，合并版本已重新部署到 Vercel 正式环境并通过线上 UI 回归。以上状态对应 2026-10-07 23:36（KST）的验证时刻，后续部署仍可能替换正式别名。本文不包含私有库存、截图、密钥、token 或凭据。
