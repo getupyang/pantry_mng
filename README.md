@@ -58,8 +58,9 @@
   - 向后兼容：若旧数据只有 `activePercent`，会在运行时初始化 `openItems`
 
 - **AI 识别录入（OpenRouter）**
-  - `recognizePhoto(imageFile)`：单张商品照片识别（name/brand/packageSize/unit/qty/expiryDate）
-  - `recognizeOrder(imageFile)`：订单截图识别（返回数组，逐个填充录入）
+  - 单件商品：先收集同一件商品的 1–3 张相机照片或本地图片，确认缩略图后点击“开始识别”；系统会联合识别品名、规格和保质期等信息，最终只保存一条商品记录
+  - 多个不同的实物商品暂不支持在一次单件识别中混拍，后续再提供对应流程
+  - 订单截图仍是批量识别多个商品的入口（返回数组，逐个确认录入）
   - 图片预处理：压缩、格式处理（含 HEIC 兼容）
   - 解析策略：JSON 解析 + 文本 fallback
 
@@ -97,6 +98,19 @@ python3 -m http.server 8000
 
 - 电脑访问：`http://localhost:8000/pantry.html`
 - 手机访问：`http://你的电脑IP:8000/pantry.html`
+
+### 显式线上识别 smoke（会写入一个新的测试家庭）
+
+该脚本接受 1–3 张同一件商品的图片。preview/production 运行必须提供管理员令牌，以便核对后台识别记录确实保存了全部图片；令牌只通过环境变量传入，不要写进仓库或测试输出。
+
+```bash
+PANTRY_BASE_URL=https://<preview-or-production-host> \
+PANTRY_ADMIN_TOKEN='<从安全环境注入>' \
+PLAYWRIGHT_MODULE=/Users/getupyang/.agents/skills/gstack/node_modules/playwright \
+node scripts/test-photo-live.cjs /absolute/path/front.jpg /absolute/path/expiry.jpg
+```
+
+脚本会等待显式点击“开始识别”后才调用识别 API，随后选择包装类型、只保存一条记录，并独立执行家庭数据 GET、刷新回读和后台图片数量检查。它会产生真实模型调用和云端测试数据，不属于默认本地回归。
 
 ---
 
@@ -164,4 +178,3 @@ python3 -m http.server 8000
 - 若做线上化：
   - 不要把 OpenRouter Key 放在前端；应改为服务端代理。
   - localStorage 数据迁移到云端时，要考虑首次导入、冲突策略与离线体验。
-

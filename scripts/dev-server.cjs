@@ -16,7 +16,7 @@ http.createServer(async(req,res)=>{
       const chunks=[];let size=0;
       for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024){res.writeHead(413);res.end();return;}chunks.push(chunk);}
       const headers={};
-      for(const key of ['content-type','x-client-id','x-family-id'])if(req.headers[key])headers[key]=req.headers[key];
+      for(const key of ['content-type','x-client-id','x-family-id','x-recognition-type','x-review-consent'])if(req.headers[key])headers[key]=req.headers[key];
       const response=await fetch(upstream+url.pathname+url.search,{method:req.method,headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(chunks),signal:AbortSignal.timeout(180000)});
       res.writeHead(response.status,{'Content-Type':response.headers.get('content-type')||'application/json','Cache-Control':'no-store'});
       res.end(Buffer.from(await response.arrayBuffer()));return;
