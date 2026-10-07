@@ -60,7 +60,16 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
         if (mode === 'network') return route.abort('failed');
         const success = {
           pantryReviewId: reviewId,
-          choices: [{ message: { content: JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(plan.type === 'order' ? [{
+            name: plan.name || '订单商品',
+            brand: '订单品牌',
+            packageSize: 200,
+            unit: 'ml',
+            qty: 1,
+            expiryDate: '2028-11-01',
+            expiryEvidence: 'EXP 11/2028',
+            missingFields: []
+          }] : {
             sameProduct: true,
             conflictReason: '',
             name: plan.name || '测试洗发水',
@@ -479,6 +488,18 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
       await addPendingPhotos([new File([bytes], 'race-a.png', { type: 'image/png' })]);
     }, png.toString('base64'));
+    await page.evaluate(() => {
+      window.__raceOriginalFetch = window.fetch;
+      window.__raceIgnoreSignalOnce = true;
+      window.fetch = (url, options = {}) => {
+        if (window.__raceIgnoreSignalOnce && String(url).includes('/api/openrouter')) {
+          window.__raceIgnoreSignalOnce = false;
+          const { signal, ...withoutSignal } = options;
+          return window.__raceOriginalFetch(url, withoutSignal);
+        }
+        return window.__raceOriginalFetch(url, options);
+      };
+    });
     recognitionQueue.push({ mode: 'success', delayMs: 250, reviewId: 'review-race-a', name: '延迟商品A' });
     await page.evaluate(() => { window.__scanAPromise = startPendingPhotoRecognition(); });
     await page.waitForFunction(() => photoRecognitionBusy === true);
@@ -496,6 +517,7 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       fieldName: document.getElementById('fi-name').value
     })), { reviewId: 'review-race-b', name: '新商品B', fieldName: '新商品B' }, 'fresh scan B owns the active review before A resolves');
     await page.evaluate(() => window.__scanAPromise);
+    await page.evaluate(() => { window.fetch = window.__raceOriginalFetch; });
     assert.deepEqual(await page.evaluate(() => ({
       reviewId: _currentRecognitionReviewId,
       name: _currentRecognitionParsedResult?.name,
@@ -508,6 +530,125 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.waitForTimeout(30);
     assert.equal(reviewUpdates.some(update => update.reviewId === 'review-race-b' && update.outcome === 'accepted'), true, 'saving B accepts B review');
     assert.equal(reviewUpdates.some(update => update.reviewId === 'review-race-b' && update.outcome === 'discarded'), false, 'stale A never discards B review');
+
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'cancel-photo.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    await page.evaluate(() => {
+      window.__cancelOriginalFetch = window.fetch;
+      window.__cancelIgnoreSignalOnce = true;
+      window.fetch = (url, options = {}) => {
+        if (window.__cancelIgnoreSignalOnce && String(url).includes('/api/openrouter')) {
+          window.__cancelIgnoreSignalOnce = false;
+          const { signal, ...withoutSignal } = options;
+          return window.__cancelOriginalFetch(url, withoutSignal);
+        }
+        return window.__cancelOriginalFetch(url, options);
+      };
+    });
+    recognitionQueue.push({ mode: 'success', delayMs: 250, reviewId: 'review-cancel-photo', name: '不应出现的取消结果' });
+    await page.evaluate(() => {
+      window.__cancelPhotoPromise = startPendingPhotoRecognition();
+      window.__cancelPhotoAttempt = activeRecognitionAttempt;
+    });
+    await page.waitForFunction(() => photoRecognitionBusy === true);
+    const cancelPhotoUrls = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+    await page.evaluate(() => cancelScan());
+    assert.equal(await page.evaluate(() => window.__cancelPhotoAttempt.controller.signal.aborted), true, 'cancel aborts the active photo controller');
+    assert.equal(await page.locator('#scan-ov').getAttribute('class'), 'scan-ov', 'cancel hides the photo overlay');
+    assert.equal(await page.evaluate(() => photoRecognitionBusy), false, 'cancel resets photo busy state');
+    assert.deepEqual(await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl)), cancelPhotoUrls, 'cancel preserves photos for retry');
+    assert.equal(await page.locator('#start-photo-recognition').isEnabled(), true, 'cancel restores retry controls');
+    await page.evaluate(() => window.__cancelPhotoPromise);
+    await page.evaluate(() => { window.fetch = window.__cancelOriginalFetch; });
+    await page.waitForTimeout(300);
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      parsed: _currentRecognitionParsedResult,
+      reviewActive: pendingPhotoReviewActive,
+      formVisible: document.getElementById('recog-result').style.display === 'block'
+    })), { reviewId: null, parsed: null, reviewActive: false, formVisible: false }, 'late cancelled photo response cannot activate a review');
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-cancel-photo' && update.outcome === 'discarded'), true, 'late cancelled photo review discards only itself');
+    await page.evaluate(() => clearPendingPhotos());
+
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'abandon-review.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 0, reviewId: 'review-abandon-active', name: '洗发水旧结果' });
+    await page.evaluate(() => startPendingPhotoRecognition());
+    assert.equal(await page.locator('#recog-result').isVisible(), true);
+    await page.evaluate(() => nav('scr-home'));
+    await page.evaluate(() => nav('scr-add'));
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      parsed: _currentRecognitionParsedResult,
+      photos: pendingPhotos.length,
+      orderItems: window._orderItems ?? null,
+      formVisible: document.getElementById('recog-result').style.display === 'block',
+      fieldName: document.getElementById('fi-name').value,
+      lastDetected: _lastDetected
+    })), { reviewId: null, parsed: null, photos: 0, orderItems: null, formVisible: false, fieldName: '', lastDetected: null }, 'abandoning an active review returns to a fresh intake');
+
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'abandon-pending.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 250, reviewId: 'review-abandon-pending', name: '不应回填的离开结果' });
+    await page.evaluate(() => { window.__abandonPendingPromise = startPendingPhotoRecognition(); });
+    await page.waitForFunction(() => photoRecognitionBusy === true);
+    await page.evaluate(() => nav('scr-home'));
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(() => window.__abandonPendingPromise);
+    await page.waitForTimeout(300);
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      parsed: _currentRecognitionParsedResult,
+      photos: pendingPhotos.length,
+      reviewActive: pendingPhotoReviewActive,
+      formVisible: document.getElementById('recog-result').style.display === 'block',
+      fieldName: document.getElementById('fi-name').value,
+      controlsEnabled: ['photo-intake-entry','intake-mode-single','intake-mode-multi','order-intake-entry'].every(id => !document.getElementById(id).disabled)
+    })), { reviewId: null, parsed: null, photos: 0, reviewActive: false, formVisible: false, fieldName: '', controlsEnabled: true }, 'leaving during pending ignores the late response and restores a fresh intake');
+
+    await page.evaluate(() => {
+      cloudReady = true;
+      pantryFamilyId = 'test-family';
+      setIntakeMode('multi');
+    });
+    recognitionQueue.push({ mode: 'success', type: 'order', delayMs: 250, reviewId: 'review-cancel-order', name: '不应出现的订单结果' });
+    await page.evaluate(encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      window.__cancelOrderPromise = startOrderRecognition(new File([bytes], 'order-delayed.png', { type: 'image/png' }));
+    }, png.toString('base64'));
+    await page.waitForFunction(() => orderRecognitionBusy === true);
+    assert.equal(await page.locator('#photo-intake-entry').isDisabled(), true, 'pending order locks photo intake');
+    assert.equal(await page.locator('#intake-mode-single').isDisabled(), true, 'pending order locks mode switching');
+    await page.evaluate(() => cancelScan());
+    assert.equal(await page.evaluate(() => orderRecognitionBusy), false, 'cancel resets order busy state');
+    assert.equal(await page.locator('#scan-ov').getAttribute('class'), 'scan-ov');
+    assert.equal(await page.locator('#photo-intake-entry').isEnabled(), true, 'cancelled order restores photo intake');
+    await page.evaluate(() => setIntakeMode('single'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'after-order-cancel.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 0, reviewId: 'review-photo-after-order', name: '取消订单后的照片商品' });
+    await page.evaluate(() => startPendingPhotoRecognition());
+    await page.waitForTimeout(300);
+    assert.deepEqual(await page.evaluate(() => ({
+      reviewId: _currentRecognitionReviewId,
+      reviewType: _currentRecognitionReviewType,
+      name: document.getElementById('fi-name').value,
+      orderItems: window._orderItems ?? null
+    })), { reviewId: 'review-photo-after-order', reviewType: 'photo', name: '取消订单后的照片商品', orderItems: null }, 'late cancelled order cannot overwrite the later photo review');
+    await page.locator('#fi-package-type').selectOption('regular');
+    await page.getByRole('button', { name: '确认录入 →' }).click();
+    await page.waitForTimeout(30);
+    assert.equal(usageEvents.some(event => event.eventName === 'item_add' && event.properties.reviewId === 'review-photo-after-order' && event.properties.source === 'photo'), true, 'photo after cancelled order keeps photo source attribution');
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-photo-after-order' && update.outcome === 'accepted'), true, 'photo review is accepted after cancelled order');
 
     await page.waitForTimeout(100);
     const photoEvents = usageEvents.filter(event => ['scan_start', 'scan_success', 'scan_error'].includes(event.eventName));

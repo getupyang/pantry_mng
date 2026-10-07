@@ -2612,9 +2612,54 @@ let pendingPhotoReservations=0;
 let pendingPhotoReviewActive=false;
 let pendingPhotoSelectionMode='single';
 let _lastPhotoRecognitionEncodedBytes=0;
+let orderRecognitionBusy=false;
+let recognitionAttemptSequence=0;
+let activeRecognitionAttempt=null;
+
+function hasActiveRecognitionReview(){
+  return pendingPhotoReviewActive||Boolean(window._orderItems&&Array.isArray(window._orderItems));
+}
+
+function isRecognitionFlowLocked(){
+  return Boolean(activeRecognitionAttempt)||photoRecognitionBusy||orderRecognitionBusy||hasActiveRecognitionReview();
+}
+
+function beginRecognitionAttempt(type){
+  const attempt={id:++recognitionAttemptSequence,type,controller:new AbortController()};
+  activeRecognitionAttempt=attempt;
+  photoRecognitionBusy=type==='photo';
+  orderRecognitionBusy=type==='order';
+  renderPendingPhotos();
+  return attempt;
+}
+
+function isRecognitionAttemptCurrent(attempt){
+  return Boolean(attempt&&activeRecognitionAttempt?.id===attempt.id);
+}
+
+function finishRecognitionAttempt(attempt){
+  if(!isRecognitionAttemptCurrent(attempt))return false;
+  activeRecognitionAttempt=null;
+  photoRecognitionBusy=false;
+  orderRecognitionBusy=false;
+  renderPendingPhotos();
+  return true;
+}
+
+function cancelActiveRecognitionAttempt(){
+  const attempt=activeRecognitionAttempt;
+  if(!attempt)return null;
+  activeRecognitionAttempt=null;
+  recognitionAttemptSequence+=1;
+  photoRecognitionBusy=false;
+  orderRecognitionBusy=false;
+  attempt.controller.abort();
+  renderPendingPhotos();
+  return attempt;
+}
 
 function setIntakeMode(mode){
-  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
+  if(isRecognitionFlowLocked())return;
   const next=mode==='multi'?'multi':'single';
   const singleButton=document.getElementById('intake-mode-single');
   const multiButton=document.getElementById('intake-mode-multi');
@@ -2706,7 +2751,7 @@ function renderPendingPhotos(){
     document.getElementById('intake-mode-multi'),
     document.getElementById('order-intake-entry')
   ].filter(Boolean);
-  const intakeLocked=photoRecognitionBusy||pendingPhotoReviewActive;
+  const intakeLocked=isRecognitionFlowLocked();
   intakeControls.forEach(control=>{control.disabled=intakeLocked;});
   grid.replaceChildren();
   pendingPhotos.forEach(photo=>{
@@ -2766,36 +2811,64 @@ function getPhotoRecognitionFailureCategory(error){
   return 'unknown';
 }
 
-function reselectPendingPhotos(){
-  if(photoRecognitionBusy)return;
-  clearPendingRecognitionReview();
-  clearPendingPhotos();
+function resetRecognitionIntakeForm(){
   const recogForm=document.getElementById('recog-result');
   const manualForm=document.getElementById('manual-form');
   if(recogForm)recogForm.style.display='none';
   if(manualForm)manualForm.style.display='block';
+  const values={
+    'fi-name':'','fi-brand':'','fi-size':'','fi-qty':'1','fi-exp':'','fi-package-type':''
+  };
+  Object.entries(values).forEach(([id,value])=>{
+    const element=document.getElementById(id);
+    if(element)element.value=value;
+  });
+  const unit=document.getElementById('fi-unit');
+  if(unit)unit.textContent='ml';
+  const badge=document.getElementById('detected-cat-badge');
+  if(badge)badge.replaceChildren();
+  const heading=document.querySelector('#recog-result .form-hd-t');
+  if(heading)heading.textContent='AI 识别结果';
+  const confidence=document.querySelector('#recog-result .form-conf');
+  if(confidence)confidence.textContent='';
+  const stock=document.querySelector('input[name="fi-open-state"][value="stock"]');
+  if(stock)stock.checked=true;
+  _lastDetected=null;
+}
+
+function clearOrderRecognitionState(){
+  window._orderItems=null;
+  window._currentOrderIndex=undefined;
+  resetRecognitionIntakeForm();
+  renderPendingPhotos();
+}
+
+function reselectPendingPhotos(){
+  if(photoRecognitionBusy)return;
+  clearPendingRecognitionReview();
+  clearPendingPhotos();
+  resetRecognitionIntakeForm();
 }
 
 async function startPendingPhotoRecognition(){
-  if(photoRecognitionBusy||pendingPhotos.length===0)return;
+  if(isRecognitionFlowLocked()||pendingPhotos.length===0)return;
   const generation=pendingPhotoGeneration;
   const files=pendingPhotos.map(photo=>photo.file);
   const imageCount=files.length;
   const fileSize=files.reduce((total,file)=>total+(Number(file.size)||0),0);
   if(_currentRecognitionReviewId&&_acceptedRecognitionItems.length===0)clearPendingRecognitionReview();
-  photoRecognitionBusy=true;
   pendingPhotoReviewActive=false;
   pendingPhotoMessage='';
-  renderPendingPhotos();
+  const attempt=beginRecognitionAttempt('photo');
   const overlay=document.getElementById('scan-ov');
   document.getElementById('scan-lbl').textContent='拍照识别中';
   document.getElementById('scan-step').textContent='合并分析照片…';
   overlay.classList.add('show');
   trackEvent('scan_start',{reqType:'photo',imageCount,fileSize,selectionMode:pendingPhotoSelectionMode});
   try{
-    const result=await recognizePhoto(files);
+    const result=await recognizePhoto(files,{controller:attempt.controller});
     const responseReviewId=result?._recognitionReviewId||null;
-    if(generation!==pendingPhotoGeneration){
+    if(generation!==pendingPhotoGeneration||!isRecognitionAttemptCurrent(attempt)){
       if(responseReviewId){
         updateRecognitionReviewFor(responseReviewId,{outcome:'discarded'});
         trackEvent('recognition_discard',{reqType:'photo',reviewId:responseReviewId});
@@ -2827,7 +2900,7 @@ async function startPendingPhotoRecognition(){
       encodedBytes:result._recognitionEncodedBytes||_lastPhotoRecognitionEncodedBytes
     });
   }catch(err){
-    if(generation!==pendingPhotoGeneration)return;
+    if(generation!==pendingPhotoGeneration||!isRecognitionAttemptCurrent(attempt))return;
     const errorMsg=String(err?.message||'识别失败，请重试');
     pendingPhotoMessage=`${errorMsg}；照片已保留，可直接重试。`;
     showError(pendingPhotoMessage);
@@ -2838,10 +2911,9 @@ async function startPendingPhotoRecognition(){
       failureCategory:getPhotoRecognitionFailureCategory(err)
     });
   }finally{
-    if(generation===pendingPhotoGeneration){
-      photoRecognitionBusy=false;
+    if(generation===pendingPhotoGeneration&&isRecognitionAttemptCurrent(attempt)){
+      finishRecognitionAttempt(attempt);
       overlay.classList.remove('show');
-      renderPendingPhotos();
     }
   }
 }
@@ -3280,7 +3352,7 @@ function getOpenRouterHeaders(reqType){
 }
 
 // 同一商品的1–3张照片联合识别
-async function recognizePhoto(imageFiles){
+async function recognizePhoto(imageFiles,options={}){
   verifyApiConfig();
   if(!Array.isArray(imageFiles)||imageFiles.length<1||imageFiles.length>3){
     throw new Error('请选择1至3张同一商品的照片');
@@ -3330,7 +3402,7 @@ async function recognizePhoto(imageFiles){
   if(!isVisionRequestWithinBudget(requestBody)){
     throw new Error('图片合计数据过大，超过识别请求限制。请减少照片数量或选择更小的图片后重试。');
   }
-  const controller=new AbortController();
+  const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
   try{
@@ -3365,7 +3437,7 @@ async function recognizePhoto(imageFiles){
 }
 
 // 订单截图识别（批量）
-async function recognizeOrder(imageFile){
+async function recognizeOrder(imageFile,options={}){
   verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
@@ -3390,7 +3462,7 @@ async function recognizeOrder(imageFile){
 4. 如果图片中同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回
 5. 如果只看到月份，例如 EXP 10/2028，expiryDate 取当月第一天：2028-10-01
 6. 只返回 JSON 数组，不要其他文字`;
-  const controller=new AbortController();
+  const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout*2;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
   try{
@@ -3406,8 +3478,6 @@ async function recognizeOrder(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status}`);
     }
     const result=await response.json();
-    _currentRecognitionReviewId=result.pantryReviewId||null;
-    _currentRecognitionReviewType='order';
     let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
     if(jsonStr.startsWith('```')){
       const lines=jsonStr.split('\n');
@@ -3418,17 +3488,10 @@ async function recognizeOrder(imageFile){
     const parsedItems=JSON.parse(jsonStr);
     const list=Array.isArray(parsedItems)?parsedItems:[parsedItems];
     const parsedList=list.map(item=>postProcessRecognitionResult(item));
-    _currentRecognitionParsedResult=parsedList;
-    _acceptedRecognitionItems=[];
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({parsedResult:parsedList,outcome:'recognized'});
-    }
+    Object.defineProperty(parsedList,'_recognitionReviewId',{value:result.pantryReviewId||null,enumerable:false});
     return parsedList;
   }catch(e){
     clearTimeout(timeoutId);
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({outcome:'error'});
-    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -3464,8 +3527,8 @@ function createFileInput(type,callback){
 }
 
 function doScan(type){
-  if(photoRecognitionBusy||pendingPhotoReviewActive){
-    showError(photoRecognitionBusy?'照片正在识别，请稍候':'请先确认当前识别结果，或重新选择照片');
+  if(isRecognitionFlowLocked()){
+    showError((photoRecognitionBusy||orderRecognitionBusy)?'识别正在进行，请稍候':'请先确认当前识别结果，或放弃后重新选择');
     return;
   }
   if(type==='photo'){
@@ -3486,9 +3549,14 @@ function doScan(type){
     return;
   }
   clearPendingRecognitionReview();
-  window._orderItems=null;
-  window._currentOrderIndex=undefined;
-  createFileInput('order',async file=>{
+  clearOrderRecognitionState();
+  createFileInput('order',file=>startOrderRecognition(file));
+}
+
+async function startOrderRecognition(file){
+    if(isRecognitionFlowLocked()||!file)return;
+    const type='order';
+    const attempt=beginRecognitionAttempt(type);
     trackEvent('scan_start',{reqType:type,fileSize:file.size});
     const ov=document.getElementById('scan-ov');
     document.getElementById('scan-lbl').textContent=type==='photo'?'拍照识别中':'读取订单截图';
@@ -3511,14 +3579,27 @@ function doScan(type){
       let result;
       clearInterval(_scanTmr);
       document.getElementById('scan-step').textContent='识别订单中的商品…';
-      result=await recognizeOrder(file);
+      result=await recognizeOrder(file,{controller:attempt.controller});
+      const responseReviewId=result?._recognitionReviewId||null;
+      if(!isRecognitionAttemptCurrent(attempt)){
+        if(responseReviewId){
+          updateRecognitionReviewFor(responseReviewId,{outcome:'discarded'});
+          trackEvent('recognition_discard',{reqType:'order',reviewId:responseReviewId});
+        }
+        return;
+      }
       if(Array.isArray(result)&&result.length>0){
+        _currentRecognitionReviewId=responseReviewId;
+        _currentRecognitionReviewType='order';
+        _currentRecognitionParsedResult=result;
+        _acceptedRecognitionItems=[];
+        if(responseReviewId)updateRecognitionReviewFor(responseReviewId,{parsedResult:result,outcome:'recognized'});
         clearInterval(_scanTmr);
         document.getElementById('scan-step').textContent=`找到${result.length}个商品`;
         // 保存订单识别结果，用于后续逐个确认录入
         window._orderItems=result;
         window._currentOrderIndex=0;
-        trackEvent('scan_success',{reqType:type,reviewId:_currentRecognitionReviewId,count:result.length});
+        trackEvent('scan_success',{reqType:type,reviewId:responseReviewId,count:result.length});
         // 填充第一个商品到表单
         fillOrderRecognitionResult(result[0],result.length);
         return;
@@ -3526,6 +3607,7 @@ function doScan(type){
         throw new Error('订单识别结果为空，请重试或手动输入');
       }
     }catch(err){
+      if(!isRecognitionAttemptCurrent(attempt))return;
       console.error('识别失败',err);
       clearInterval(_scanTmr);
       document.getElementById('scan-ov').classList.remove('show');
@@ -3541,8 +3623,9 @@ function doScan(type){
       trackEvent('scan_error',{reqType:type,message:errorMsg.slice(0,120)});
       document.getElementById('recog-result').style.display='none';
       document.getElementById('manual-form').style.display='block';
+    }finally{
+      if(isRecognitionAttemptCurrent(attempt))finishRecognitionAttempt(attempt);
     }
-  });
 }
 
 // 填充识别结果到表单（单张照片）
@@ -3635,6 +3718,14 @@ function cancelScan(){
   clearInterval(_scanTmr);
   document.getElementById('scan-ov').classList.remove('show');
   if(_fileInput)_fileInput.value='';
+  const cancelled=cancelActiveRecognitionAttempt();
+  if(cancelled?.type==='order'){
+    clearPendingRecognitionReview();
+    clearOrderRecognitionState();
+  }else if(!cancelled&&window._orderItems){
+    clearPendingRecognitionReview();
+    clearOrderRecognitionState();
+  }
 }
 
 function confirmAdd(){
@@ -3657,7 +3748,7 @@ function confirmAdd(){
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
-  const addSource=isManual?'manual':(window._orderItems?'order':'photo');
+  const addSource=isManual?'manual':(_currentRecognitionReviewType==='order'&&window._orderItems?'order':'photo');
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
   const finalUnit=formUnit||d.unit;
@@ -3754,8 +3845,10 @@ let _curScr='scr-home';
 function nav(id){
   if(id===_curScr)return;
   if(_curScr==='scr-add'&&id!=='scr-add'){
+    cancelActiveRecognitionAttempt();
     clearPendingRecognitionReview();
     clearPendingPhotos();
+    clearOrderRecognitionState();
   }
   const c=document.getElementById(_curScr);
   const n=document.getElementById(id);
