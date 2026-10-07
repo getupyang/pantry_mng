@@ -2,6 +2,7 @@
 
 - 记录时间：2026-10-08（Asia/Seoul）
 - 关联 commit：`043c159`（`codex/raise-recognition-limits`）
+- 生产部署：`dpl_7XK9X49FD12whgph2QnzK7o5ScL2`，验证时间 2026-10-08 00:31（Asia/Seoul）。
 - 涉及文件：`api/openrouter.js`、`scripts/test-rate-limits.mjs`
 - 改了什么：保留滚动窗口限流，将单客户端上限提高到 30 次/小时、120 次/24 小时；家庭提高到 300 次/24 小时；IP 提高到 90 次/小时、240 次/24 小时。
 - 为什么改：批量录入用户触发原有 12 次/小时等限制，生产日志确认 `/api/openrouter` 返回 429。
