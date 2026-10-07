@@ -3,6 +3,7 @@
 - 记录时间：2026-10-07（KST）。
 - 实现 commit：`6131bf2`（`Add editable category to item intake`），涉及 `pantry.html`。
 - 测试 commit：`e028023`（`test: cover editable add-page category`），涉及 `scripts/test-editable-category.cjs`。
+- 测试稳定化 commit：`9ef7339`（`Stabilize editable category browser test`），仅调整 `scripts/test-editable-category.cjs` 的测试同步与断言，不改变生产行为。
 - 分支：`codex/editable-category`。
 
 ### 改了什么，以及为什么
@@ -53,6 +54,7 @@ perl -pe 's|http://127\.0\.0\.1:8031/pantry\.html|http://127.0.0.1:8032/pantry.h
 
 - 专项分类测试通过自动建议、手动覆盖、识别回传、订单逐项重置、物品库分组及 320/390/1280 响应式检查。
 - 原有 package-type 浏览器测试通过；命令只在 stdin 中临时把 8031 替换为 8032，并显式注入 Chromium 路径，未修改 `scripts/test-package-type.cjs`。
+- 最终复跑曾暴露测试在应用 230ms 页面导航过渡尚未结束时点击，导致旧 screen 拦截指针事件。`9ef7339` 将测试 harness 改为基于页面状态条件等待 screen settled，不使用固定 sleep；同时补充“分类覆盖不改变检测器派生的 `shape`、`unit`、`dailyUse`、`color` 属性”和最终分类选择器重置断言。稳定化后，同一 focused browser test 连续运行三次均通过。这是测试同步与覆盖面的改进，不是产品行为变化。
 
 #### 单元与源码检查
 
@@ -71,4 +73,4 @@ git diff --check
 
 本文记录适用于当前单 HTML 实现、当前 `DETECT_MAP` 分类来源、现有 `items` JSON 中的 `cat` 字段，以及当前浏览器加载方式。若添加表单、分类映射、同步数据结构、浏览器版本或部署版本变化，本文命令与结论可能过时，需要重新核对。
 
-当前状态：已在本地分支 `codex/editable-category` 验证；本文修订时尚未推送或部署。远端 commit 与已部署版本状态由控制任务在后续发布步骤中分别核对。本文不包含私有库存、截图、密钥、token 或凭据。
+当前状态：已在本地分支 `codex/editable-category` 验证；本文此次修订时仍未推送或部署。远端 commit 与已部署版本状态由控制任务在后续发布步骤中分别核对。本文不包含私有库存、截图、密钥、token 或凭据。
