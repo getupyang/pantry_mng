@@ -1093,21 +1093,43 @@ function updateSVGLevel(item,interactive=false){
 //  AUTO-DETECT: keyword → {cat, shape, unit, dailyUse}
 // ═══════════════════════════════════════════════
 const DETECT_MAP=[
-  {kw:['洗发','发水','护发素','发膜','发油'],cat:'护发',shape:'shampooBottle',unit:'ml',daily:6,color:['#c0dce8','#3870a8','#144068']},
-  {kw:['洗面奶','洁面','卸妆','洁肤'],cat:'护肤',shape:'facewashTube',unit:'g',daily:2,color:['#d0e8d4','#509060','#205030']},
+  {kw:['面膜','贴膜'],cat:'面膜',shape:'generic',unit:'片',daily:0.2,color:['#eadde8','#a86f98','#68405e']},
+  {kw:['面霜','乳霜','眼霜','精华霜','保湿霜'],cat:'面霜',shape:'jar',unit:'g',daily:0.8,color:['#d0dce8','#4e6880','#1e3850']},
+  {kw:['防晒','防晒霜','防晒乳'],cat:'防晒',shape:'facewashTube',unit:'ml',daily:1,color:['#f6e9b8','#c7972e','#75550d']},
+  {kw:['爽肤水','化妆水','柔肤水','精粹水','精华水','神仙水'],cat:'水',shape:'generic',unit:'ml',daily:2,color:['#c4dce8','#4f809a','#245064']},
+  {kw:['乳液','保湿乳'],cat:'乳液',shape:'shampooBottle',unit:'ml',daily:1,color:['#e2ddd0','#9a8160','#5f4931']},
+  {kw:['精华液','精华','玻尿酸','安瓶'],cat:'精华',shape:'generic',unit:'ml',daily:0.5,color:['#c4dcd4','#4a7c6e','#1e4c3e']},
+  {kw:['洗面奶','洁面','卸妆','洁肤'],cat:'洁面',shape:'facewashTube',unit:'g',daily:2,color:['#d0e8d4','#509060','#205030']},
+  {kw:['护手霜'],cat:'护手霜',shape:'facewashTube',unit:'ml',daily:1,color:['#ecd8c0','#c07848','#783818']},
+  {kw:['护体乳','身体乳','润肤'],cat:'身体乳',shape:'shampooBottle',unit:'ml',daily:2,color:['#ead8ca','#b87d58','#70402b']},
+  {kw:['香水','香氛'],cat:'香水',shape:'generic',unit:'ml',daily:0.2,color:['#e6d5eb','#956cac','#57396a']},
+  {kw:['护发精油','发油'],cat:'护发精油',shape:'generic',unit:'ml',daily:0.5,color:['#ead9ad','#aa7f28','#644812']},
+  {kw:['护发素','发膜'],cat:'护发素',shape:'shampooBottle',unit:'ml',daily:4,color:['#d3d8ec','#6b78aa','#36436e']},
+  {kw:['洗发','发水'],cat:'洗发水',shape:'shampooBottle',unit:'ml',daily:6,color:['#c0dce8','#3870a8','#144068']},
+  {kw:['粉底','气垫','妆前乳','隔离霜'],cat:'底妆',shape:'generic',unit:'ml',daily:0.3,color:['#ead4c3','#ad7650','#6c432d']},
+  {kw:['修容','阴影粉'],cat:'修容',shape:'generic',unit:'g',daily:0.05,color:['#dfc8b8','#986b50','#5c3d2d']},
+  {kw:['口红','唇膏','唇釉'],cat:'口红',shape:'generic',unit:'g',daily:0.05,color:['#edc3c8','#b94758','#762534']},
+  {kw:['眼线笔','眼线液','眼线胶'],cat:'眼线笔',shape:'generic',unit:'支',daily:0.01,color:['#ced0d6','#525968','#282e38']},
+  {kw:['腮红'],cat:'腮红',shape:'generic',unit:'g',daily:0.05,color:['#f2cbd0','#cb6876','#843946']},
+  {kw:['高光'],cat:'高光',shape:'generic',unit:'g',daily:0.03,color:['#f3e6c0','#c5a654','#78621e']},
+  {kw:['假睫毛'],cat:'假睫毛',shape:'generic',unit:'对',daily:0.2,color:['#d8d3dc','#6f657a','#393241']},
+  {kw:['散粉','蜜粉'],cat:'散粉',shape:'jar',unit:'g',daily:0.1,color:['#e7dfd4','#9d8971','#5a4a3b']},
+  {kw:['定妆喷雾'],cat:'定妆喷雾',shape:'shampooBottle',unit:'ml',daily:0.5,color:['#d0e3e6','#62939a','#315c62']},
   {kw:['牙膏','漱口'],cat:'口腔',shape:'toothpaste',unit:'g',daily:1.5,color:['#b8e0f4','#2e88c0','#0e4870']},
-  {kw:['面霜','乳霜','眼霜','精华霜','保湿霜'],cat:'护肤',shape:'jar',unit:'g',daily:0.8,color:['#d0dce8','#4e6880','#1e3850']},
   {kw:['垃圾袋','垃圾桶袋','清洁袋'],cat:'清洁',shape:'trashBag',unit:'个',daily:0.5,color:['#d8e8d4','#508850','#1e5020']},
   {kw:['抽纸','面纸','纸巾','手帕纸','湿巾'],cat:'纸品',shape:'tissueBox',unit:'抽',daily:5,color:['#ece4d4','#b08c60','#68482e']},
   {kw:['洗衣液','洗衣粉','柔顺剂','衣物'],cat:'清洁',shape:'laundryJug',unit:'ml',daily:30,color:['#d4e0f0','#4860a0','#182860']},
   {kw:['沐浴','沐浴露','沐浴乳','沐浴啫喱'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:8,color:['#d4c4ec','#7050a8','#3a1e68']},
   {kw:['洗洁精','餐具','碗'],cat:'清洁',shape:'laundryJug',unit:'ml',daily:5,color:['#fce4a8','#c48c1e','#785008']},
-  {kw:['神仙水','精华液','精华','玻尿酸','安瓶'],cat:'护肤',shape:'generic',unit:'ml',daily:0.5,color:['#c4dcd4','#4a7c6e','#1e4c3e']},
-  {kw:['护手霜','护体乳','身体乳','润肤'],cat:'护肤',shape:'facewashTube',unit:'ml',daily:1,color:['#ecd8c0','#c07848','#783818']},
   {kw:['卫生纸','手纸','厕纸'],cat:'纸品',shape:'tissueBox',unit:'卷',daily:0.5,color:['#ece4d4','#b08c60','#68482e']},
   {kw:['洗手液','皂液'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:5,color:['#d8ecd8','#489048','#185818']},
 ];
-const ITEM_CATEGORIES=[...new Set([...DETECT_MAP.map(rule=>rule.cat),'其他'])];
+const ITEM_CATEGORIES=[
+  '面膜','面霜','水','乳液','精华','洁面','护手霜','身体乳','防晒','香水',
+  '洗发水','护发精油','护发素',
+  '底妆','修容','口红','眼线笔','腮红','高光','假睫毛','散粉','定妆喷雾',
+  '口腔','清洁','纸品','其他',
+];
 
 function detectItem(name){
   if(!name||name.length<2) return null;

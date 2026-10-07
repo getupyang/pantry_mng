@@ -4,7 +4,7 @@
 
 **Goal:** Make the app's existing automatic `cat` classification editable in both add-item forms, while continuing to save the user's final choice in the existing item JSON.
 
-**Architecture:** Keep `DETECT_MAP` and the string `cat` field as the only classification sources of truth. Build both category selectors from the unique categories already present in `DETECT_MAP`, add `其他` as the fallback, and separate the selected category from the detected rule so category edits do not alter shape, unit, daily use, or color.
+**Architecture:** Keep the existing string `cat` field. Build both selectors from one explicit flat `ITEM_CATEGORIES` catalog, use `DETECT_MAP` only to suggest a detailed category from the name, and separate the selected category from the detected rule so category edits do not alter shape, unit, daily use, or color.
 
 **Tech Stack:** Single-file HTML/CSS/vanilla JavaScript app, Node.js `node:test`/assertions, Playwright browser tests, local static HTTP server.
 
@@ -12,7 +12,7 @@
 
 ## File map
 
-- Modify `pantry.html`: add the two category selectors, populate them from `DETECT_MAP`, keep automatic selection in sync with name input/recognition, and save the selected value.
+- Modify `pantry.html`: add the two category selectors, populate them from the explicit flat catalog, keep automatic selection in sync with detailed name rules/recognition, and save the selected value.
 - Create `scripts/test-editable-category.cjs`: browser regression covering automatic selection, manual override, photo/order form behavior, fallback, persistence, gallery grouping, and responsive layout.
 - Create `docs/editable-category.md`: dated implementation and verification record linked to the feature commit.
 
@@ -29,13 +29,15 @@
 
 Use the same syntax compilation and mocked API setup as `scripts/test-package-type.cjs`. Clear the in-memory inventory before assertions, enter the add screen, and assert that `#mf-category` and `#fi-category` exist.
 
-The test must derive its expected option values from the page's existing rules:
+The corrected test must assert the product vocabulary explicitly rather than derive it from detection rules:
 
 ```js
-const expectedCategories = await page.evaluate(() => [
-  ...new Set(DETECT_MAP.map(rule => rule.cat)),
-  '其他'
-]);
+const expectedCategories = [
+  '面膜', '面霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
+  '洗发水', '护发精油', '护发素',
+  '底妆', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
+  '口腔', '清洁', '纸品', '其他',
+];
 assert.deepEqual(
   await page.locator('#mf-category option').evaluateAll(options => options.map(option => option.value)),
   expectedCategories
@@ -46,7 +48,7 @@ Cover these behaviors in order:
 
 ```js
 await page.locator('#mf-name').fill('洗发水');
-assert.equal(await page.locator('#mf-category').inputValue(), '护发');
+assert.equal(await page.locator('#mf-category').inputValue(), '洗发水');
 await page.locator('#mf-category').selectOption('其他');
 await page.locator('#mf-package-type').selectOption('regular');
 await page.getByRole('button', {name:'确认录入 →', exact:true}).click();

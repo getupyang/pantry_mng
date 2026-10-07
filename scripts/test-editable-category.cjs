@@ -69,19 +69,31 @@ async function waitForSettledScreen(page, targetId) {
     assert.equal(await page.locator('#mf-category').count(), 1, 'missing #mf-category category selector');
     assert.equal(await page.locator('#fi-category').count(), 1, 'missing #fi-category category selector');
 
-    const expectedCategories = await page.evaluate(() => [...new Set([...DETECT_MAP.map(rule => rule.cat), '其他'])]);
+    const expectedCategories = [
+      '面膜', '面霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
+      '洗发水', '护发精油', '护发素',
+      '底妆', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
+      '口腔', '清洁', '纸品', '其他',
+    ];
     for (const selector of ['#mf-category', '#fi-category']) {
       const options = await page.locator(`${selector} option`).evaluateAll(nodes => nodes.map(node => ({
         value: node.value,
         text: node.textContent.trim(),
       })));
-      assert.deepEqual(options.map(option => option.value), expectedCategories, `${selector} exposes DETECT_MAP categories plus 其他`);
+      assert.deepEqual(options.map(option => option.value), expectedCategories, `${selector} exposes the requested flat categories`);
       assert.deepEqual(options.map(option => option.text), expectedCategories, `${selector} labels match category values`);
     }
+    assert.deepEqual(await page.evaluate(() => [
+      detectItem('补水面膜')?.cat,
+      detectItem('夜间保湿面霜')?.cat,
+      detectItem('安热沙防晒乳')?.cat,
+      detectItem('丝绒口红')?.cat,
+      detectItem('旅行洗发水')?.cat,
+    ]), ['面膜', '面霜', '防晒', '口红', '洗发水'], 'automatic detection suggests detailed flat categories');
 
     // A recognized manual name selects its rule category, but a user override is authoritative.
     await page.locator('#mf-name').fill('旅行洗发水 原味');
-    assert.equal(await page.locator('#mf-category').inputValue(), '护发');
+    assert.equal(await page.locator('#mf-category').inputValue(), '洗发水');
     await page.locator('#mf-category').selectOption('清洁');
     await page.locator('#mf-name').fill('清新薄荷牙膏');
     assert.equal(await page.locator('#mf-category').inputValue(), '口腔', 'editing a manual name re-suggests its newly detected category');
@@ -108,12 +120,12 @@ async function waitForSettledScreen(page, targetId) {
     await page.evaluate(() => nav('scr-add'));
     await waitForSettledScreen(page, 'scr-add');
     await page.locator('#mf-name').fill('夜间保湿面霜');
-    assert.equal(await page.locator('#mf-category').inputValue(), '护肤');
+    assert.equal(await page.locator('#mf-category').inputValue(), '面霜');
     await chooseRequiredPackageType(page, 'mf');
     await page.getByRole('button', { name: '确认录入 →', exact: true }).click();
     assert.deepEqual(await page.evaluate(() => ({ name: items.at(-1).name, cat: items.at(-1).cat })), {
       name: '夜间保湿面霜',
-      cat: '护肤',
+      cat: '面霜',
     }, 'recognized manual name and detected category are saved unchanged');
 
     // Unmatched names should make the fallback explicit rather than inherit the prior override.
@@ -166,7 +178,7 @@ async function waitForSettledScreen(page, targetId) {
       fillOrderRecognitionResult(window._orderItems[0], window._orderItems.length);
     });
     await waitForSettledScreen(page, 'scr-add');
-    assert.equal(await page.locator('#fi-category').inputValue(), '护发');
+    assert.equal(await page.locator('#fi-category').inputValue(), '洗发水');
     await page.locator('#fi-category').selectOption('口腔');
     await chooseRequiredPackageType(page, 'fi');
     await page.getByRole('button', { name: '确认录入 →', exact: true }).click();
