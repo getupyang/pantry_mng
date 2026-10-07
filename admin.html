@@ -39,7 +39,10 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
 .mini-btn{padding:5px 9px;border-radius:7px;font-size:12px;background:var(--card);color:var(--text);border:1px solid var(--line)}
 .review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .review-card{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fffdf7}
+.review-images{width:150px;max-width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;align-content:start}
+.review-images[data-count="1"]{grid-template-columns:1fr}
 .review-img{width:150px;aspect-ratio:3/4;border-radius:8px;border:1px solid var(--line);background:#eee4d5;object-fit:cover}
+.review-images .review-img{width:100%;min-width:0}
 .review-empty-img{width:150px;aspect-ratio:3/4;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
 .review-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
 .tag{font-size:12px;border-radius:99px;padding:2px 7px;background:#eee4d5;color:var(--muted)}
@@ -59,8 +62,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
 .login h2{font-size:18px;margin-bottom:10px}
 .login input{width:100%;margin:8px 0 10px}
 .error{color:var(--red);font-size:13px;margin-top:8px;min-height:18px}
-@media(max-width:980px){.review-grid{grid-template-columns:1fr}.review-card{grid-template-columns:120px minmax(0,1fr)}.review-img,.review-empty-img{width:120px}}
-@media(max-width:860px){body{padding:14px}.top{display:block}.controls{margin-top:12px}.grid{grid-template-columns:repeat(2,1fr)}.panel{grid-template-columns:1fr}.review-card{grid-template-columns:1fr}.review-img,.review-empty-img{width:100%;max-height:260px}.review-cols{grid-template-columns:1fr}}
+@media(max-width:980px){.review-grid{grid-template-columns:1fr}.review-card{grid-template-columns:120px minmax(0,1fr)}.review-images,.review-img,.review-empty-img{width:120px}}
+@media(max-width:860px){body{padding:14px}.top{display:block}.controls{margin-top:12px}.grid{grid-template-columns:repeat(2,1fr)}.panel{grid-template-columns:1fr}.review-card{grid-template-columns:1fr}.review-images{width:min(100%,360px)}.review-images[data-count="1"]{width:min(100%,180px)}.review-images[data-count="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}.review-images .review-img,.review-empty-img{width:100%;max-height:260px}.review-cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -277,8 +280,14 @@ function renderRecognitionReviews(rows){
     const acceptedItems=Array.isArray(row.acceptedData?.items)?row.acceptedData.items:[];
     const lastAccepted=acceptedItems[acceptedItems.length-1]||null;
     const edits=lastAccepted?.editedFields?.length?lastAccepted.editedFields.join('、'):(acceptedItems.length?'无字段改动':'未采纳');
-    const image=row.imageDataUrl
-      ? `<img class="review-img" src="${esc(row.imageDataUrl)}" alt="识别样本">`
+    const imageCandidates=Array.isArray(row.imageDataUrls)&&row.imageDataUrls.length
+      ? row.imageDataUrls
+      : [row.imageDataUrl];
+    const images=imageCandidates
+      .filter(value=>typeof value==='string'&&/^data:image\/(?:gif|jpe?g|png|webp);base64,/i.test(value))
+      .slice(0,3);
+    const image=images.length
+      ? `<div class="review-images" data-count="${images.length}">${images.map((src,index)=>`<img class="review-img" src="${esc(src)}" alt="识别样本照片 ${index+1}">`).join('')}</div>`
       : '<div class="review-empty-img">无图片</div>';
     return `<div class="review-card">
       <div>${image}</div>

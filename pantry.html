@@ -317,11 +317,27 @@ input,textarea,.finput,.rate-inp{
    ADD SCREEN
 ════════════════════════════ */
 .add-wrap{padding:16px 14px 80px;}
-.add-method{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:11px;cursor:pointer;margin-bottom:9px;transition:box-shadow .14s;-webkit-tap-highlight-color:transparent;}
+.add-method{display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:var(--surface);color:inherit;font:inherit;text-align:left;border:1px solid var(--border);border-radius:11px;cursor:pointer;margin-bottom:9px;transition:box-shadow .14s;-webkit-tap-highlight-color:transparent;}
 .add-method:hover{box-shadow:0 2px 10px var(--shadow);}
 .add-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:var(--f-xl);flex-shrink:0;}
 .add-method h3{font-size:var(--f-md);font-weight:500;margin-bottom:2px;}
 .add-method p{font-size:var(--f-base);color:var(--text2);line-height:1.45;}
+.intake-mode-selector{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;padding:4px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;}
+.intake-mode-selector button{min-width:0;padding:9px 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--text2);font:inherit;font-size:var(--f-base);cursor:pointer;}
+.intake-mode-selector button[aria-pressed="true"]{background:var(--surface);border-color:var(--border2);color:var(--green);font-weight:500;box-shadow:0 1px 4px var(--shadow);}
+.pending-photo-collector{margin:10px 0 14px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:11px;}
+.pending-photo-status{font-size:var(--f-sm);color:var(--text2);line-height:1.45;margin-bottom:9px;}
+.pending-photo-error{font-size:var(--f-sm);color:var(--red);line-height:1.45;overflow-wrap:anywhere;margin-bottom:9px;}
+.pending-photo-error:empty{display:none;}
+.pending-photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+.pending-photo{position:relative;min-width:0;aspect-ratio:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.pending-photo img{display:block;width:100%;height:100%;object-fit:cover;}
+.pending-photo-remove{position:absolute;top:4px;right:4px;width:28px;height:28px;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:rgba(32,30,27,.82);color:#fff;font-size:18px;line-height:24px;cursor:pointer;}
+.pending-photo-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;}
+.pending-photo-actions button{min-width:0;padding:10px 8px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font:inherit;font-size:var(--f-sm);cursor:pointer;white-space:normal;}
+.pending-photo-actions .primary{background:var(--text);border-color:var(--text);color:#fff;}
+.pending-photo-actions button:disabled{cursor:default;opacity:.55;}
+.future-batch-message{margin:10px 0 14px;padding:12px;border:1px dashed var(--border2);border-radius:10px;background:var(--surface2);color:var(--text2);font-size:var(--f-base);line-height:1.55;}
 .photo-guide{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px;margin:12px 0 14px;box-shadow:0 1px 6px var(--shadow);}
 .photo-guide-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
 .photo-guide-title{font-size:var(--f-sm);font-family:'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);}
@@ -648,15 +664,34 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <span id="cloud-status-text">正在连接云端…</span>
       <button type="button" class="s-btn cancel" id="cloud-retry" onclick="connectCloud()">重试连接</button>
     </div>
-    <div class="add-method" onclick="doScan('photo')">
-      <div class="add-icon" style="background:#e8f5ee">📷</div>
-      <div><h3>拍照识别</h3><p>拍产品标签，缺少品名或保质期时会提示补拍</p></div>
+    <div class="intake-mode-selector" role="group" aria-label="录入商品数量">
+      <button type="button" id="intake-mode-single" aria-pressed="true" onclick="setIntakeMode('single')">单件商品</button>
+      <button type="button" id="intake-mode-multi" aria-pressed="false" onclick="setIntakeMode('multi')">多件商品</button>
     </div>
-    <div class="add-method" onclick="doScan('order')">
-      <div class="add-icon" style="background:#fef8ea">🧾</div>
-      <div><h3>订单截图</h3><p>淘宝 / 京东截图，批量导入并自动分类</p></div>
+    <div id="single-intake-panel">
+      <button type="button" class="add-method" id="photo-intake-entry" onclick="doScan('photo')">
+        <div class="add-icon" style="background:#e8f5ee">📷</div>
+        <div><h3>拍照识别</h3><p>拍产品标签，可为同一件商品添加 1–3 张照片</p></div>
+      </button>
+      <div class="pending-photo-collector" aria-label="待识别照片">
+        <div class="pending-photo-status" id="pending-photo-status" role="status">尚未添加照片（0/3 张）</div>
+        <div class="pending-photo-error" id="pending-photo-error" role="alert"></div>
+        <div class="pending-photo-grid" id="pending-photo-grid"></div>
+        <div class="pending-photo-actions">
+          <button type="button" id="add-pending-photo" onclick="doScan('photo')">＋ 添加照片</button>
+          <button type="button" class="primary" id="start-photo-recognition" onclick="startPendingPhotoRecognition()" disabled>开始识别（请先添加照片）</button>
+          <button type="button" id="reselect-pending-photos" onclick="reselectPendingPhotos()" hidden>重新选择照片</button>
+        </div>
+      </div>
     </div>
-    <div class="photo-guide">
+    <div id="multi-intake-panel" hidden>
+      <button type="button" class="add-method" id="order-intake-entry" onclick="doScan('order')">
+        <div class="add-icon" style="background:#fef8ea">🧾</div>
+        <div><h3>订单截图</h3><p>淘宝 / 京东截图，批量导入并自动分类</p></div>
+      </button>
+      <div class="future-batch-message" id="future-physical-batch" role="note">多件实物的批量拍摄将在后续开放；现在可先使用订单截图。</div>
+    </div>
+    <div class="photo-guide" id="single-photo-guide">
       <div class="photo-guide-hd">
         <div class="photo-guide-title">拍照示例</div>
         <div class="photo-guide-chip">内测识别</div>
@@ -2602,6 +2637,339 @@ let _currentRecognitionReviewId=null;
 let _currentRecognitionReviewType=null;
 let _currentRecognitionParsedResult=null;
 let _acceptedRecognitionItems=[];
+const MAX_SINGLE_ITEM_PHOTOS=3;
+let pendingPhotos=[];
+let photoRecognitionBusy=false;
+let pendingPhotoMessage='';
+let pendingPhotoGeneration=0;
+let pendingPhotoReservations=0;
+let pendingPhotoReviewActive=false;
+let pendingPhotoSelectionMode='single';
+let _lastPhotoRecognitionEncodedBytes=0;
+let orderRecognitionBusy=false;
+let recognitionAttemptSequence=0;
+let activeRecognitionAttempt=null;
+
+function clearRecognitionScanPresentation(){
+  clearInterval(_scanTmr);
+  _scanTmr=null;
+  document.getElementById('scan-ov')?.classList.remove('show');
+}
+
+function hasActiveRecognitionReview(){
+  return pendingPhotoReviewActive||Boolean(window._orderItems&&Array.isArray(window._orderItems));
+}
+
+function isRecognitionFlowLocked(){
+  return Boolean(activeRecognitionAttempt)||photoRecognitionBusy||orderRecognitionBusy||hasActiveRecognitionReview();
+}
+
+function beginRecognitionAttempt(type){
+  const attempt={id:++recognitionAttemptSequence,type,controller:new AbortController()};
+  activeRecognitionAttempt=attempt;
+  photoRecognitionBusy=type==='photo';
+  orderRecognitionBusy=type==='order';
+  renderPendingPhotos();
+  return attempt;
+}
+
+function isRecognitionAttemptCurrent(attempt){
+  return Boolean(attempt&&activeRecognitionAttempt?.id===attempt.id);
+}
+
+function finishRecognitionAttempt(attempt){
+  if(!isRecognitionAttemptCurrent(attempt))return false;
+  activeRecognitionAttempt=null;
+  photoRecognitionBusy=false;
+  orderRecognitionBusy=false;
+  clearRecognitionScanPresentation();
+  renderPendingPhotos();
+  return true;
+}
+
+function cancelActiveRecognitionAttempt(){
+  const attempt=activeRecognitionAttempt;
+  if(!attempt)return null;
+  activeRecognitionAttempt=null;
+  recognitionAttemptSequence+=1;
+  photoRecognitionBusy=false;
+  orderRecognitionBusy=false;
+  attempt.controller.abort();
+  clearRecognitionScanPresentation();
+  renderPendingPhotos();
+  return attempt;
+}
+
+function setIntakeMode(mode){
+  if(isRecognitionFlowLocked())return;
+  const next=mode==='multi'?'multi':'single';
+  const singleButton=document.getElementById('intake-mode-single');
+  const multiButton=document.getElementById('intake-mode-multi');
+  const singlePanel=document.getElementById('single-intake-panel');
+  const multiPanel=document.getElementById('multi-intake-panel');
+  const photoGuide=document.getElementById('single-photo-guide');
+  if(singleButton)singleButton.setAttribute('aria-pressed',String(next==='single'));
+  if(multiButton)multiButton.setAttribute('aria-pressed',String(next==='multi'));
+  if(singlePanel)singlePanel.hidden=next!=='single';
+  if(multiPanel)multiPanel.hidden=next!=='multi';
+  if(photoGuide)photoGuide.hidden=next!=='single';
+}
+
+function loadPendingPhotoPreview(file){
+  return new Promise((resolve,reject)=>{
+    if(!file||(file.type&&!file.type.toLowerCase().startsWith('image/'))){
+      reject(new Error('不是可用的图片文件'));
+      return;
+    }
+    const objectUrl=URL.createObjectURL(file);
+    const image=new Image();
+    image.onload=()=>resolve(objectUrl);
+    image.onerror=()=>{
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('图片无法读取'));
+    };
+    image.src=objectUrl;
+  });
+}
+
+async function addPendingPhotos(files){
+  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
+  const selected=Array.from(files||[]);
+  if(!selected.length)return;
+  pendingPhotoSelectionMode=selected.length>1?'multiple':'single';
+  const generation=pendingPhotoGeneration;
+  const errors=[];
+  const ignored=[];
+  for(const file of selected){
+    if(generation!==pendingPhotoGeneration)break;
+    if(pendingPhotos.length+pendingPhotoReservations>=MAX_SINGLE_ITEM_PHOTOS){
+      ignored.push(file.name||'未命名文件');
+      continue;
+    }
+    pendingPhotoReservations+=1;
+    try{
+      const objectUrl=await loadPendingPhotoPreview(file);
+      if(generation!==pendingPhotoGeneration){
+        URL.revokeObjectURL(objectUrl);
+        continue;
+      }
+      pendingPhotoReservations=Math.max(0,pendingPhotoReservations-1);
+      pendingPhotos.push({
+        id:crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`,
+        file,
+        objectUrl
+      });
+    }catch(error){
+      if(generation!==pendingPhotoGeneration)continue;
+      pendingPhotoReservations=Math.max(0,pendingPhotoReservations-1);
+      errors.push(`${file?.name||'未命名文件'}：${error.message||'图片无法读取'}`);
+    }
+  }
+  if(generation!==pendingPhotoGeneration)return;
+  if(ignored.length)errors.push(`最多添加 ${MAX_SINGLE_ITEM_PHOTOS} 张，已忽略：${ignored.join('、')}`);
+  pendingPhotoMessage=errors.join('；');
+  renderPendingPhotos();
+}
+
+function removePendingPhoto(id){
+  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
+  const index=pendingPhotos.findIndex(photo=>photo.id===id);
+  if(index<0)return;
+  const [removed]=pendingPhotos.splice(index,1);
+  URL.revokeObjectURL(removed.objectUrl);
+  pendingPhotoMessage='';
+  renderPendingPhotos();
+}
+
+function renderPendingPhotos(){
+  const grid=document.getElementById('pending-photo-grid');
+  const status=document.getElementById('pending-photo-status');
+  const error=document.getElementById('pending-photo-error');
+  const addButton=document.getElementById('add-pending-photo');
+  const startButton=document.getElementById('start-photo-recognition');
+  const reselectButton=document.getElementById('reselect-pending-photos');
+  if(!grid||!status||!error||!addButton||!startButton||!reselectButton)return;
+  const intakeControls=[
+    document.getElementById('photo-intake-entry'),
+    document.getElementById('intake-mode-single'),
+    document.getElementById('intake-mode-multi'),
+    document.getElementById('order-intake-entry')
+  ].filter(Boolean);
+  const intakeLocked=isRecognitionFlowLocked();
+  intakeControls.forEach(control=>{control.disabled=intakeLocked;});
+  grid.replaceChildren();
+  pendingPhotos.forEach(photo=>{
+    const item=document.createElement('div');
+    item.className='pending-photo';
+    const image=document.createElement('img');
+    image.src=photo.objectUrl;
+    image.alt=`预览 ${photo.file.name}`;
+    const remove=document.createElement('button');
+    remove.type='button';
+    remove.className='pending-photo-remove';
+    remove.setAttribute('aria-label',`移除照片 ${photo.file.name}`);
+    remove.textContent='×';
+    remove.disabled=intakeLocked;
+    remove.addEventListener('click',()=>removePendingPhoto(photo.id));
+    item.append(image,remove);
+    grid.appendChild(item);
+  });
+  const count=pendingPhotos.length;
+  status.textContent=photoRecognitionBusy
+    ?`正在识别 ${count} 张照片…`
+    :pendingPhotoReviewActive
+      ?`已识别 ${count} 张照片，请确认商品信息`
+    :(count?`已选择 ${count}/${MAX_SINGLE_ITEM_PHOTOS} 张照片`:`尚未添加照片（0/${MAX_SINGLE_ITEM_PHOTOS} 张）`);
+  error.textContent=pendingPhotoMessage;
+  const atLimit=count>=MAX_SINGLE_ITEM_PHOTOS;
+  addButton.hidden=atLimit||pendingPhotoReviewActive;
+  addButton.disabled=atLimit||photoRecognitionBusy||pendingPhotoReviewActive;
+  startButton.hidden=pendingPhotoReviewActive;
+  startButton.disabled=count===0||photoRecognitionBusy;
+  startButton.textContent=photoRecognitionBusy
+    ?'正在准备照片…'
+    :(count?`开始识别（${count} 张）`:'开始识别（请先添加照片）');
+  reselectButton.hidden=!pendingPhotoReviewActive;
+}
+
+function clearPendingPhotos(){
+  if(activeRecognitionAttempt?.type==='photo')cancelActiveRecognitionAttempt();
+  pendingPhotoGeneration+=1;
+  pendingPhotoReservations=0;
+  pendingPhotos.forEach(photo=>URL.revokeObjectURL(photo.objectUrl));
+  pendingPhotos=[];
+  photoRecognitionBusy=false;
+  pendingPhotoReviewActive=false;
+  pendingPhotoSelectionMode='single';
+  _lastPhotoRecognitionEncodedBytes=0;
+  pendingPhotoMessage='';
+  renderPendingPhotos();
+}
+
+function getPhotoRecognitionFailureCategory(error){
+  const message=String(error?.message||error||'').toLowerCase();
+  if(message.includes('数据过大')||message.includes('请求限制')||message.includes('too large'))return 'too_large';
+  if(message.includes('不同商品')||message.includes('无关照片'))return 'mixed_product';
+  if(message.includes('超时')||message.includes('timeout'))return 'timeout';
+  if(message.includes('网络')||message.includes('failed to fetch')||message.includes('network'))return 'network';
+  if(message.includes('解析')||message.includes('结果为空')||message.includes('json'))return 'parse';
+  return 'unknown';
+}
+
+function resetRecognitionIntakeForm(){
+  const recogForm=document.getElementById('recog-result');
+  const manualForm=document.getElementById('manual-form');
+  if(recogForm)recogForm.style.display='none';
+  if(manualForm)manualForm.style.display='block';
+  const values={
+    'fi-name':'','fi-brand':'','fi-size':'','fi-qty':'1','fi-exp':'','fi-package-type':'','fi-location':''
+  };
+  Object.entries(values).forEach(([id,value])=>{
+    const element=document.getElementById(id);
+    if(element)element.value=value;
+  });
+  const unit=document.getElementById('fi-unit');
+  if(unit)unit.textContent='ml';
+  const badge=document.getElementById('detected-cat-badge');
+  if(badge)badge.replaceChildren();
+  const heading=document.querySelector('#recog-result .form-hd-t');
+  if(heading)heading.textContent='AI 识别结果';
+  const confidence=document.querySelector('#recog-result .form-conf');
+  if(confidence)confidence.textContent='';
+  const stock=document.querySelector('input[name="fi-open-state"][value="stock"]');
+  if(stock)stock.checked=true;
+  _lastDetected=null;
+}
+
+function clearOrderRecognitionState(){
+  window._orderItems=null;
+  window._currentOrderIndex=undefined;
+  resetRecognitionIntakeForm();
+  renderPendingPhotos();
+}
+
+function reselectPendingPhotos(){
+  if(photoRecognitionBusy)return;
+  clearPendingRecognitionReview();
+  clearPendingPhotos();
+  resetRecognitionIntakeForm();
+}
+
+async function startPendingPhotoRecognition(){
+  if(isRecognitionFlowLocked()||pendingPhotos.length===0)return;
+  if(!cloudReady||typeof pantryFamilyId!=='string'||!pantryFamilyId.trim()){
+    renderCloudStatus();
+    showError(cloudState==='connecting'
+      ?'正在连接云端，连接完成后可重试识别；照片已保留。'
+      :'云端连接失败，请重试连接后再识别；照片已保留。');
+    renderPendingPhotos();
+    return;
+  }
+  const generation=pendingPhotoGeneration;
+  const files=pendingPhotos.map(photo=>photo.file);
+  const imageCount=files.length;
+  const fileSize=files.reduce((total,file)=>total+(Number(file.size)||0),0);
+  if(_currentRecognitionReviewId&&_acceptedRecognitionItems.length===0)clearPendingRecognitionReview();
+  pendingPhotoReviewActive=false;
+  pendingPhotoMessage='';
+  const attempt=beginRecognitionAttempt('photo');
+  const overlay=document.getElementById('scan-ov');
+  document.getElementById('scan-lbl').textContent='拍照识别中';
+  document.getElementById('scan-step').textContent='合并分析照片…';
+  overlay.classList.add('show');
+  trackEvent('scan_start',{reqType:'photo',imageCount,fileSize,selectionMode:pendingPhotoSelectionMode});
+  try{
+    const result=await recognizePhoto(files,{controller:attempt.controller});
+    const responseReviewId=result?._recognitionReviewId||null;
+    if(generation!==pendingPhotoGeneration||!isRecognitionAttemptCurrent(attempt)){
+      if(responseReviewId){
+        updateRecognitionReviewFor(responseReviewId,{outcome:'discarded'});
+        trackEvent('recognition_discard',{reqType:'photo',reviewId:responseReviewId});
+      }
+      return;
+    }
+    _currentRecognitionReviewId=responseReviewId;
+    _currentRecognitionReviewType='photo';
+    _currentRecognitionParsedResult=result;
+    _acceptedRecognitionItems=[];
+    if(responseReviewId)updateRecognitionReviewFor(responseReviewId,{parsedResult:result,outcome:'recognized'});
+    if(result?.sameProduct===false){
+      const reason=result.conflictReason||'照片可能不是同一件商品';
+      pendingPhotoMessage=`${reason}。请移除无关照片后重试。`;
+      document.getElementById('recog-result').style.display='none';
+      document.getElementById('manual-form').style.display='block';
+      showError(pendingPhotoMessage);
+      trackEvent('scan_error',{reqType:'photo',message:pendingPhotoMessage.slice(0,120),imageCount,failureCategory:'mixed_product'});
+      return;
+    }
+    if(!hasUsableRecognitionResult(result))throw new Error('识别结果为空或无法解析，请直接重试');
+    pendingPhotoReviewActive=true;
+    fillRecognitionResult(result);
+    trackEvent('scan_success',{
+      reqType:'photo',
+      reviewId:_currentRecognitionReviewId,
+      count:1,
+      imageCount,
+      encodedBytes:result._recognitionEncodedBytes||_lastPhotoRecognitionEncodedBytes
+    });
+  }catch(err){
+    if(generation!==pendingPhotoGeneration||!isRecognitionAttemptCurrent(attempt))return;
+    const errorMsg=String(err?.message||'识别失败，请重试');
+    pendingPhotoMessage=`${errorMsg}；照片已保留，可直接重试。`;
+    showError(pendingPhotoMessage);
+    trackEvent('scan_error',{
+      reqType:'photo',
+      message:errorMsg.slice(0,120),
+      imageCount,
+      failureCategory:getPhotoRecognitionFailureCategory(err)
+    });
+  }finally{
+    if(generation===pendingPhotoGeneration&&isRecognitionAttemptCurrent(attempt)){
+      finishRecognitionAttempt(attempt);
+      overlay.classList.remove('show');
+    }
+  }
+}
 
 function hasRecognitionReviewConsent(){
   return localStorage.getItem(RECOGNITION_REVIEW_CONSENT_KEY)==='yes';
@@ -2670,10 +3038,10 @@ function getCurrentParsedRecognitionItem(source){
   return _currentRecognitionParsedResult&&!Array.isArray(_currentRecognitionParsedResult)?_currentRecognitionParsedResult:null;
 }
 
-function updateRecognitionReview(payload){
-  if(!_currentRecognitionReviewId||!pantryFamilyId)return Promise.resolve();
+function updateRecognitionReviewFor(reviewId,payload){
+  if(!reviewId||!pantryFamilyId)return Promise.resolve();
   const body={
-    reviewId:_currentRecognitionReviewId,
+    reviewId,
     familyId:pantryFamilyId,
     clientId:getOrCreateClientId(),
     ...payload
@@ -2683,6 +3051,10 @@ function updateRecognitionReview(payload){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)
   }).catch(e=>console.debug('识别样本回传失败',e));
+}
+
+function updateRecognitionReview(payload){
+  return updateRecognitionReviewFor(_currentRecognitionReviewId,payload);
 }
 
 function recordRecognitionAccepted(accepted,source){
@@ -2707,6 +3079,13 @@ function recordRecognitionAccepted(accepted,source){
 }
 
 // 图片预处理：压缩和格式转换
+const IMAGE_MAX_WIDTH=1280;
+const IMAGE_MAX_HEIGHT=1280;
+const IMAGE_INITIAL_QUALITY=0.7;
+const IMAGE_MIN_QUALITY=0.4;
+const IMAGE_TARGET_BYTES=300*1024;
+const VISION_REQUEST_BUDGET_BYTES=Math.floor(6.5*1024*1024);
+
 async function preprocessImage(file){
   return new Promise((resolve,reject)=>{
     const fileName=file.name.toLowerCase();
@@ -2744,17 +3123,16 @@ async function preprocessImage(file){
 
 // 压缩图片
 function compressImage(img,resolve,reject){
-  const MAX_WIDTH=1280;const MAX_HEIGHT=1280;const QUALITY=0.7;const MAX_SIZE=300*1024;
   let width=img.width,height=img.height;
-  if(width>MAX_WIDTH||height>MAX_HEIGHT){
-    const ratio=Math.min(MAX_WIDTH/width,MAX_HEIGHT/height);
+  if(width>IMAGE_MAX_WIDTH||height>IMAGE_MAX_HEIGHT){
+    const ratio=Math.min(IMAGE_MAX_WIDTH/width,IMAGE_MAX_HEIGHT/height);
     width=Math.round(width*ratio);height=Math.round(height*ratio);
   }
   const canvas=document.createElement('canvas');
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d');
   ctx.drawImage(img,0,0,width,height);
-  let quality=QUALITY;
+  let quality=IMAGE_INITIAL_QUALITY;
   function convertBlobToBase64(blob){
     return new Promise((res,rej)=>{
       const reader=new FileReader();
@@ -2765,12 +3143,12 @@ function compressImage(img,resolve,reject){
   }
   canvas.toBlob(async blob=>{
     if(!blob){reject(new Error('图片处理失败'));return;}
-    if(blob.size>MAX_SIZE&&quality>0.4){
-      quality=Math.max(0.4,quality-0.15);
+    if(blob.size>IMAGE_TARGET_BYTES&&quality>IMAGE_MIN_QUALITY){
+      quality=Math.max(IMAGE_MIN_QUALITY,quality-0.15);
       canvas.toBlob(async blob2=>{
         if(!blob2){reject(new Error('图片压缩失败'));return;}
-        if(blob2.size>MAX_SIZE&&quality>0.4){
-          quality=Math.max(0.4,quality-0.15);
+        if(blob2.size>IMAGE_TARGET_BYTES&&quality>IMAGE_MIN_QUALITY){
+          quality=Math.max(IMAGE_MIN_QUALITY,quality-0.15);
           canvas.toBlob(async blob3=>{
             if(!blob3){reject(new Error('图片压缩失败'));return;}
             try{resolve(await convertBlobToBase64(blob3));}catch(e){reject(new Error('图片转换失败'));}
@@ -2842,6 +3220,10 @@ function normalizeExpiryDate(dateStr){
   let match=raw.match(/(\d{2,4})年\s*(\d{1,2})月\s*(\d{1,2})日?/);
   if(match)return buildDate(match[1],match[2],match[3]);
 
+  // iOS 数字键盘无法输入连字符，允许直接输入 YYYYMMDD。
+  match=raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(match)return buildDate(match[1],match[2],match[3]);
+
   match=raw.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
   if(match)return buildDate(match[1],match[2],match[3]);
 
@@ -2869,6 +3251,15 @@ function normalizeRecognitionUnit(unit){
 
 function postProcessRecognitionResult(result){
   const parsed=result&&typeof result==='object'?result:{};
+  const hasSameProduct=Object.prototype.hasOwnProperty.call(parsed,'sameProduct');
+  if(hasSameProduct&&typeof parsed.sameProduct==='string'){
+    const normalizedSameProduct=parsed.sameProduct.trim().toLowerCase();
+    if(normalizedSameProduct==='true')parsed.sameProduct=true;
+    else parsed.sameProduct=false;
+  }else if(hasSameProduct&&typeof parsed.sameProduct!=='boolean'){
+    parsed.sameProduct=false;
+  }
+  parsed.conflictReason=String(parsed.conflictReason??'').trim().slice(0,500);
   parsed.name=String(parsed.name||'').trim();
   parsed.brand=String(parsed.brand||'').trim();
   parsed.packageSize=parseFloat(parsed.packageSize)||0;
@@ -2937,6 +3328,12 @@ function parseRecognitionResult(result){
 // 从文本中提取信息（fallback）
 function extractFromText(text){
   const result={};
+  const sameProductMatch=text.match(/(?:^|\n)\s*["'“”]?(?:sameProduct|是否同一商品)["'“”]?\s*[:：=]\s*["'“”]?\s*(true|false)\s*["'“”]?\s*,?\s*(?=\n|$)/im);
+  if(sameProductMatch)result.sameProduct=sameProductMatch[1];
+  const conflictReasonMatch=text.match(/(?:^|\n)\s*["'“”]?(?:conflictReason|冲突原因)["'“”]?\s*[:：=]\s*(.+?)\s*,?\s*(?=\n|$)/im);
+  if(conflictReasonMatch){
+    result.conflictReason=conflictReasonMatch[1].trim().replace(/^["'“”]+|["'“”]+$/g,'').trim();
+  }
   const nameMatch=text.match(/品名[：:]\s*([^\n]+)/i)||text.match(/name[：:]\s*([^\n]+)/i);
   if(nameMatch)result.name=nameMatch[1].trim();
   const brandMatch=text.match(/品牌[：:]\s*([^\n]+)/i)||text.match(/brand[：:]\s*([^\n]+)/i);
@@ -2966,14 +3363,20 @@ function getVisionModels(){
   return OPENROUTER_CONFIG.model?[OPENROUTER_CONFIG.model]:[];
 }
 
-function buildVisionRequest(prompt,base64Url,maxTokens){
+function buildVisionRequest(prompt,base64Urls,maxTokens){
+  const validImageUrls=Array.isArray(base64Urls)&&
+    base64Urls.length>=1&&base64Urls.length<=3&&
+    base64Urls.every(url=>typeof url==='string'&&/^data:image\/[^;,]+;base64,.+$/.test(url));
+  if(!validImageUrls){
+    throw new TypeError('Vision request requires one to three non-empty image data URLs');
+  }
   const models=getVisionModels();
   const body={
     messages:[{
       role:'user',
       content:[
         {type:'text',text:prompt},
-        {type:'image_url',image_url:{url:base64Url}}
+        ...base64Urls.map(url=>({type:'image_url',image_url:{url}}))
       ]
     }],
     temperature:0,
@@ -2982,6 +3385,10 @@ function buildVisionRequest(prompt,base64Url,maxTokens){
   if(models.length>1)body.models=models;
   else body.model=models[0];
   return body;
+}
+
+function isVisionRequestWithinBudget(body){
+  return new TextEncoder().encode(JSON.stringify(body)).byteLength<=VISION_REQUEST_BUDGET_BYTES;
 }
 
 function getOpenRouterHeaders(reqType){
@@ -2995,14 +3402,22 @@ function getOpenRouterHeaders(reqType){
   return headers;
 }
 
-// 单张照片识别
-async function recognizePhoto(imageFile){
+// 同一商品的1–3张照片联合识别
+async function recognizePhoto(imageFiles,options={}){
   verifyApiConfig();
-  const base64Data=await imageToBase64(imageFile);
-  const base64Url=`data:image/jpeg;base64,${base64Data}`;
-  const prompt=`请仔细识别这张图片中的商品信息，返回严格的 JSON 格式（不要包含任何其他文字）：
+  if(!Array.isArray(imageFiles)||imageFiles.length<1||imageFiles.length>3){
+    throw new Error('请选择1至3张同一商品的照片');
+  }
+  const base64Urls=[];
+  for(const imageFile of imageFiles){
+    const base64Data=await imageToBase64(imageFile);
+    base64Urls.push(`data:image/jpeg;base64,${base64Data}`);
+  }
+  const prompt=`请仔细识别这些图片中的商品信息。所有图片预期展示同一个商品，请合并正面、背面、底部等图片中的互补信息，返回严格的 JSON 格式（不要包含任何其他文字）：
 
 {
+  "sameProduct": true,
+  "conflictReason": "",
   "name": "品名",
   "brand": "品牌",
   "packageSize": 250,
@@ -3014,12 +3429,14 @@ async function recognizePhoto(imageFile){
 }
 
 识别要求：
-1. name（品名）：提取商品的具体名称，如"洗面奶"、"洗发水"、"牙膏"等，要简洁准确
-2. brand（品牌）：提取品牌名称，如"可复美"、"多芬"等。如果图片中没有品牌信息，返回空字符串 ""
-3. packageSize（单件容量）：提取单件/单包的容量数字，如 250、100、500 等。只返回数字，不要单位
-4. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
-5. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
-6. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回。如果图片中没有保质期相关信息或完全无法识别，返回 null
+1. sameProduct（是否为同一商品）：如果所有图片能归属于同一个商品，返回 true；如果品牌、品名、规格或其他关键信息显示它们是不同商品，返回 false
+2. conflictReason（冲突原因）：sameProduct 为 false 时简洁说明冲突，否则返回空字符串 ""
+3. name（品名）：提取商品的具体名称，如"洗面奶"、"洗发水"、"牙膏"等，要简洁准确
+4. brand（品牌）：提取品牌名称，如"可复美"、"多芬"等。如果图片中没有品牌信息，返回空字符串 ""
+5. packageSize（单件容量）：提取单件/单包的容量数字，如 250、100、500 等。只返回数字，不要单位
+6. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
+7. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
+8. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回。如果图片中没有保质期相关信息或完全无法识别，返回 null
 
 重要：
 - 只返回 JSON 对象，不要包含 markdown 代码块标记（三个反引号加json等）
@@ -3028,15 +3445,22 @@ async function recognizePhoto(imageFile){
 - 如果只看到保质期/底部/喷码，看不到品名、品牌、容量，不要猜测商品类型，name/brand 返回空字符串，packageSize 返回 0，并在 missingFields 中标记缺失字段
 - expiryEvidence 返回图片中看到的日期原文；如果没有看到日期，返回空字符串
 - missingFields 返回无法从图片中确认的字段名数组
+- 如果图片存在商品冲突，必须返回 sameProduct:false 和具体 conflictReason；其他商品字段使用空字符串、0 或 null，不得把不同商品的信息合成一条
 - 如果某个字段无法识别，使用空字符串、0 或 null，不要编造`;
-  const controller=new AbortController();
+  const requestBody=buildVisionRequest(prompt,base64Urls,700);
+  const encodedBytes=new TextEncoder().encode(JSON.stringify(requestBody)).byteLength;
+  _lastPhotoRecognitionEncodedBytes=encodedBytes;
+  if(!isVisionRequestWithinBudget(requestBody)){
+    throw new Error('图片合计数据过大，超过识别请求限制。请减少照片数量或选择更小的图片后重试。');
+  }
+  const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:getOpenRouterHeaders('photo'),
-      body:JSON.stringify(buildVisionRequest(prompt,base64Url,700)),
+      body:JSON.stringify(requestBody),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -3046,20 +3470,22 @@ async function recognizePhoto(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status} ${response.statusText}`);
     }
     const result=await response.json();
-    _currentRecognitionReviewId=result.pantryReviewId||null;
-    _currentRecognitionReviewType='photo';
     const parsed=parseRecognitionResult(result);
-    _currentRecognitionParsedResult=parsed;
-    _acceptedRecognitionItems=[];
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({parsedResult:parsed,outcome:'recognized'});
+    if(!Object.prototype.hasOwnProperty.call(parsed,'sameProduct')){
+      if(imageFiles.length===1){
+        parsed.sameProduct=true;
+      }else{
+        parsed.sameProduct=false;
+        parsed.conflictReason='模型未确认这些照片属于同一件商品，请重试、移除照片或改为手动录入';
+      }
     }
+    Object.defineProperties(parsed,{
+      _recognitionReviewId:{value:result.pantryReviewId||null,enumerable:false},
+      _recognitionEncodedBytes:{value:encodedBytes,enumerable:false}
+    });
     return parsed;
   }catch(e){
     clearTimeout(timeoutId);
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({outcome:'error'});
-    }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
     }
@@ -3070,7 +3496,7 @@ async function recognizePhoto(imageFile){
 }
 
 // 订单截图识别（批量）
-async function recognizeOrder(imageFile){
+async function recognizeOrder(imageFile,options={}){
   verifyApiConfig();
   const base64Data=await imageToBase64(imageFile);
   const base64Url=`data:image/jpeg;base64,${base64Data}`;
@@ -3095,14 +3521,15 @@ async function recognizeOrder(imageFile){
 4. 如果图片中同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回
 5. 如果只看到月份，例如 EXP 10/2028，expiryDate 取当月第一天：2028-10-01
 6. 只返回 JSON 数组，不要其他文字`;
-  const controller=new AbortController();
+  const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout*2;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
+  let responseReviewId=null;
   try{
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:getOpenRouterHeaders('order'),
-      body:JSON.stringify(buildVisionRequest(prompt,base64Url,2000)),
+      body:JSON.stringify(buildVisionRequest(prompt,[base64Url],2000)),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -3111,8 +3538,7 @@ async function recognizeOrder(imageFile){
       throw new Error(errorData.error?.message||`API 错误: ${response.status}`);
     }
     const result=await response.json();
-    _currentRecognitionReviewId=result.pantryReviewId||null;
-    _currentRecognitionReviewType='order';
+    responseReviewId=typeof result.pantryReviewId==='string'?result.pantryReviewId.slice(0,200):null;
     let jsonStr=(result.choices?.[0]?.message?.content||'').trim();
     if(jsonStr.startsWith('```')){
       const lines=jsonStr.split('\n');
@@ -3123,16 +3549,12 @@ async function recognizeOrder(imageFile){
     const parsedItems=JSON.parse(jsonStr);
     const list=Array.isArray(parsedItems)?parsedItems:[parsedItems];
     const parsedList=list.map(item=>postProcessRecognitionResult(item));
-    _currentRecognitionParsedResult=parsedList;
-    _acceptedRecognitionItems=[];
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({parsedResult:parsedList,outcome:'recognized'});
-    }
+    Object.defineProperty(parsedList,'_recognitionReviewId',{value:responseReviewId,enumerable:false});
     return parsedList;
   }catch(e){
     clearTimeout(timeoutId);
-    if(_currentRecognitionReviewId){
-      updateRecognitionReview({outcome:'error'});
+    if(responseReviewId&&e&&typeof e==='object'){
+      Object.defineProperty(e,'_recognitionReviewId',{value:responseReviewId,enumerable:false});
     }
     if(e.message&&(e.message.includes('Failed to fetch')||e.message.includes('ERR_NETWORK')||e.message.includes('NetworkError'))){
       throw new Error('网络连接失败，请检查网络连接后重试。如果问题持续，可能是网络不稳定或API服务暂时不可用。');
@@ -3149,25 +3571,38 @@ function createFileInput(type,callback){
   _fileInput=document.createElement('input');
   _fileInput.type='file';
   _fileInput.accept='image/*';
+  _fileInput.multiple=type==='photo';
   _fileInput.style.display='none';
   _fileInput.onchange=async e=>{
-    const file=e.target.files[0];
-    if(!file)return;
+    const files=Array.from(e.target.files||[]);
+    if(!files.length)return;
     try{
-      await callback(file);
+      await callback(type==='photo'?files:files[0]);
     }catch(err){
-      console.error('识别失败',err);
-      showError(err.message||'识别失败，请重试');
+      console.error(type==='photo'?'添加照片失败':'识别失败',err);
+      showError(err.message||(type==='photo'?'添加照片失败，请重试':'识别失败，请重试'));
       cancelScan();
     }
     _fileInput.value='';
   };
-  _fileInput.oncancel=()=>cancelScan();
+  _fileInput.oncancel=()=>{_fileInput.value='';};
   document.body.appendChild(_fileInput);
   _fileInput.click();
 }
 
 function doScan(type){
+  if(isRecognitionFlowLocked()){
+    showError((photoRecognitionBusy||orderRecognitionBusy)?'识别正在进行，请稍候':'请先确认当前识别结果，或放弃后重新选择');
+    return;
+  }
+  if(type==='photo'){
+    if(!hasRecognitionReviewConsent()){
+      ensureRecognitionReviewConsent(()=>doScan(type));
+      return;
+    }
+    createFileInput('photo',files=>addPendingPhotos(files));
+    return;
+  }
   if(!cloudReady||!pantryFamilyId){
     renderCloudStatus();
     showError(cloudState==='connecting'?'正在连接云端，请稍后再点拍照识别':'云端连接失败，请点击「重试连接」');
@@ -3178,9 +3613,14 @@ function doScan(type){
     return;
   }
   clearPendingRecognitionReview();
-  window._orderItems=null;
-  window._currentOrderIndex=undefined;
-  createFileInput('image',async file=>{
+  clearOrderRecognitionState();
+  createFileInput('order',file=>startOrderRecognition(file));
+}
+
+async function startOrderRecognition(file){
+    if(isRecognitionFlowLocked()||!file)return;
+    const type='order';
+    const attempt=beginRecognitionAttempt(type);
     trackEvent('scan_start',{reqType:type,fileSize:file.size});
     const ov=document.getElementById('scan-ov');
     document.getElementById('scan-lbl').textContent=type==='photo'?'拍照识别中':'读取订单截图';
@@ -3201,34 +3641,45 @@ function doScan(type){
     },500);
     try{
       let result;
-      if(type==='photo'){
-        clearInterval(_scanTmr);
-        document.getElementById('scan-step').textContent='调用AI识别中…';
-        result=await recognizePhoto(file);
-        if(!hasUsableRecognitionResult(result)){
-          throw new Error('识别结果为空，请重试或手动输入');
+      clearInterval(_scanTmr);
+      document.getElementById('scan-step').textContent='识别订单中的商品…';
+      result=await recognizeOrder(file,{controller:attempt.controller});
+      const responseReviewId=result?._recognitionReviewId||null;
+      if(!isRecognitionAttemptCurrent(attempt)){
+        if(responseReviewId){
+          updateRecognitionReviewFor(responseReviewId,{outcome:'discarded'});
+          trackEvent('recognition_discard',{reqType:'order',reviewId:responseReviewId});
         }
-        trackEvent('scan_success',{reqType:type,reviewId:_currentRecognitionReviewId,missingFields:(result.missingFields||[]).length,hasName:!!result.name,hasExpiry:!!result.expiryDate});
-        fillRecognitionResult(result);
+        return;
+      }
+      if(Array.isArray(result)&&result.length>0){
+        _currentRecognitionReviewId=responseReviewId;
+        _currentRecognitionReviewType='order';
+        _currentRecognitionParsedResult=result;
+        _acceptedRecognitionItems=[];
+        if(responseReviewId)updateRecognitionReviewFor(responseReviewId,{parsedResult:result,outcome:'recognized'});
+        clearInterval(_scanTmr);
+        document.getElementById('scan-step').textContent=`找到${result.length}个商品`;
+        // 保存订单识别结果，用于后续逐个确认录入
+        window._orderItems=result;
+        window._currentOrderIndex=0;
+        trackEvent('scan_success',{reqType:type,reviewId:responseReviewId,count:result.length});
+        // 填充第一个商品到表单
+        fillOrderRecognitionResult(result[0],result.length);
+        return;
       }else{
-        clearInterval(_scanTmr);
-        document.getElementById('scan-step').textContent='识别订单中的商品…';
-        result=await recognizeOrder(file);
-        if(Array.isArray(result)&&result.length>0){
-          clearInterval(_scanTmr);
-          document.getElementById('scan-step').textContent=`找到${result.length}个商品`;
-          // 保存订单识别结果，用于后续逐个确认录入
-          window._orderItems=result;
-          window._currentOrderIndex=0;
-          trackEvent('scan_success',{reqType:type,reviewId:_currentRecognitionReviewId,count:result.length});
-          // 填充第一个商品到表单
-          fillOrderRecognitionResult(result[0],result.length);
-          return;
-        }else{
-          throw new Error('订单识别结果为空，请重试或手动输入');
-        }
+        throw new Error('订单识别结果为空，请重试或手动输入');
       }
     }catch(err){
+      const errorReviewId=err?._recognitionReviewId||null;
+      if(!isRecognitionAttemptCurrent(attempt)){
+        if(errorReviewId){
+          updateRecognitionReviewFor(errorReviewId,{outcome:'discarded'});
+          trackEvent('recognition_discard',{reqType:'order',reviewId:errorReviewId});
+        }
+        return;
+      }
+      if(errorReviewId)updateRecognitionReviewFor(errorReviewId,{outcome:'error'});
       console.error('识别失败',err);
       clearInterval(_scanTmr);
       document.getElementById('scan-ov').classList.remove('show');
@@ -3244,8 +3695,9 @@ function doScan(type){
       trackEvent('scan_error',{reqType:type,message:errorMsg.slice(0,120)});
       document.getElementById('recog-result').style.display='none';
       document.getElementById('manual-form').style.display='block';
+    }finally{
+      if(isRecognitionAttemptCurrent(attempt))finishRecognitionAttempt(attempt);
     }
-  });
 }
 
 // 填充识别结果到表单（单张照片）
@@ -3336,9 +3788,16 @@ function fillFormFields(result){
 }
 
 function cancelScan(){
-  clearInterval(_scanTmr);
-  document.getElementById('scan-ov').classList.remove('show');
+  clearRecognitionScanPresentation();
   if(_fileInput)_fileInput.value='';
+  const cancelled=cancelActiveRecognitionAttempt();
+  if(cancelled?.type==='order'){
+    clearPendingRecognitionReview();
+    clearOrderRecognitionState();
+  }else if(!cancelled&&window._orderItems){
+    clearPendingRecognitionReview();
+    clearOrderRecognitionState();
+  }
 }
 
 function confirmAdd(){
@@ -3363,7 +3822,7 @@ function confirmAdd(){
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
-  const addSource=isManual?'manual':(window._orderItems?'order':'photo');
+  const addSource=isManual?'manual':(_currentRecognitionReviewType==='order'&&window._orderItems?'order':'photo');
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
   const finalUnit=formUnit||d.unit;
@@ -3462,7 +3921,10 @@ let _curScr='scr-home';
 function nav(id){
   if(id===_curScr)return;
   if(_curScr==='scr-add'&&id!=='scr-add'){
+    cancelActiveRecognitionAttempt();
     clearPendingRecognitionReview();
+    clearPendingPhotos();
+    clearOrderRecognitionState();
   }
   const c=document.getElementById(_curScr);
   const n=document.getElementById(id);
@@ -3473,7 +3935,10 @@ function nav(id){
   // 确保旧页面有active类才能正确执行out动画
   if(c.classList.contains('active')){
     c.classList.add('out');
-    setTimeout(()=>c.classList.remove('active','out'),230);
+    setTimeout(()=>{
+      if(c.id!==_curScr)c.classList.remove('active','out');
+      else c.classList.remove('out');
+    },230);
   }else{
     // 如果旧页面没有active类，直接移除所有类
     c.classList.remove('active','out');
@@ -3486,6 +3951,8 @@ function nav(id){
     initLocationSelects();
     ensureExpiryInputsVisible();
     const ik=window._emptyIntakeKind;
+    setIntakeMode(ik==='order'?'multi':'single');
+    renderPendingPhotos();
     if(ik){
       window._emptyIntakeKind=null;
       if(ik==='manual'){
@@ -3518,7 +3985,7 @@ function ensureExpiryInputsVisible(){
     if((el.getAttribute('type')||'').toLowerCase()!=='date')return;
     // 在 iOS 上统一降级为文本输入，避免 date 控件不显示/不可点
     el.setAttribute('type','text');
-    el.setAttribute('placeholder','YYYY-MM-DD');
+    el.setAttribute('placeholder','YYYYMMDD（如 20281124）');
     el.setAttribute('inputmode','numeric');
     el.addEventListener('blur',()=>{
       const v=(el.value||'').trim();
@@ -3567,6 +4034,8 @@ populateCategorySelects();
 applyFontSize(loadFontSize());
 ensureExpiryInputsVisible();
 captureAttribution();
+setIntakeMode('single');
+renderPendingPhotos();
 
 const now2=new Date();
 document.getElementById('today-str').textContent=
