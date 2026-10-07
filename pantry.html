@@ -2673,6 +2673,13 @@ function recordRecognitionAccepted(accepted,source){
 }
 
 // 图片预处理：压缩和格式转换
+const IMAGE_MAX_WIDTH=1280;
+const IMAGE_MAX_HEIGHT=1280;
+const IMAGE_INITIAL_QUALITY=0.7;
+const IMAGE_MIN_QUALITY=0.4;
+const IMAGE_TARGET_BYTES=300*1024;
+const VISION_REQUEST_BUDGET_BYTES=Math.floor(6.5*1024*1024);
+
 async function preprocessImage(file){
   return new Promise((resolve,reject)=>{
     const fileName=file.name.toLowerCase();
@@ -2710,17 +2717,16 @@ async function preprocessImage(file){
 
 // 压缩图片
 function compressImage(img,resolve,reject){
-  const MAX_WIDTH=1280;const MAX_HEIGHT=1280;const QUALITY=0.7;const MAX_SIZE=300*1024;
   let width=img.width,height=img.height;
-  if(width>MAX_WIDTH||height>MAX_HEIGHT){
-    const ratio=Math.min(MAX_WIDTH/width,MAX_HEIGHT/height);
+  if(width>IMAGE_MAX_WIDTH||height>IMAGE_MAX_HEIGHT){
+    const ratio=Math.min(IMAGE_MAX_WIDTH/width,IMAGE_MAX_HEIGHT/height);
     width=Math.round(width*ratio);height=Math.round(height*ratio);
   }
   const canvas=document.createElement('canvas');
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d');
   ctx.drawImage(img,0,0,width,height);
-  let quality=QUALITY;
+  let quality=IMAGE_INITIAL_QUALITY;
   function convertBlobToBase64(blob){
     return new Promise((res,rej)=>{
       const reader=new FileReader();
@@ -2731,12 +2737,12 @@ function compressImage(img,resolve,reject){
   }
   canvas.toBlob(async blob=>{
     if(!blob){reject(new Error('图片处理失败'));return;}
-    if(blob.size>MAX_SIZE&&quality>0.4){
-      quality=Math.max(0.4,quality-0.15);
+    if(blob.size>IMAGE_TARGET_BYTES&&quality>IMAGE_MIN_QUALITY){
+      quality=Math.max(IMAGE_MIN_QUALITY,quality-0.15);
       canvas.toBlob(async blob2=>{
         if(!blob2){reject(new Error('图片压缩失败'));return;}
-        if(blob2.size>MAX_SIZE&&quality>0.4){
-          quality=Math.max(0.4,quality-0.15);
+        if(blob2.size>IMAGE_TARGET_BYTES&&quality>IMAGE_MIN_QUALITY){
+          quality=Math.max(IMAGE_MIN_QUALITY,quality-0.15);
           canvas.toBlob(async blob3=>{
             if(!blob3){reject(new Error('图片压缩失败'));return;}
             try{resolve(await convertBlobToBase64(blob3));}catch(e){reject(new Error('图片转换失败'));}
@@ -2936,14 +2942,17 @@ function getVisionModels(){
   return OPENROUTER_CONFIG.model?[OPENROUTER_CONFIG.model]:[];
 }
 
-function buildVisionRequest(prompt,base64Url,maxTokens){
+function buildVisionRequest(prompt,base64Urls,maxTokens){
+  if(!Array.isArray(base64Urls)||base64Urls.length===0){
+    throw new TypeError('Vision request requires at least one image URL');
+  }
   const models=getVisionModels();
   const body={
     messages:[{
       role:'user',
       content:[
         {type:'text',text:prompt},
-        {type:'image_url',image_url:{url:base64Url}}
+        ...base64Urls.map(url=>({type:'image_url',image_url:{url}}))
       ]
     }],
     temperature:0,
@@ -2952,6 +2961,10 @@ function buildVisionRequest(prompt,base64Url,maxTokens){
   if(models.length>1)body.models=models;
   else body.model=models[0];
   return body;
+}
+
+function isVisionRequestWithinBudget(body){
+  return new TextEncoder().encode(JSON.stringify(body)).byteLength<=VISION_REQUEST_BUDGET_BYTES;
 }
 
 function getOpenRouterHeaders(reqType){
@@ -2965,14 +2978,22 @@ function getOpenRouterHeaders(reqType){
   return headers;
 }
 
-// 单张照片识别
-async function recognizePhoto(imageFile){
+// 同一商品的1–3张照片联合识别
+async function recognizePhoto(imageFiles){
   verifyApiConfig();
-  const base64Data=await imageToBase64(imageFile);
-  const base64Url=`data:image/jpeg;base64,${base64Data}`;
-  const prompt=`请仔细识别这张图片中的商品信息，返回严格的 JSON 格式（不要包含任何其他文字）：
+  if(!Array.isArray(imageFiles)||imageFiles.length<1||imageFiles.length>3){
+    throw new Error('请选择1至3张同一商品的照片');
+  }
+  const base64Urls=[];
+  for(const imageFile of imageFiles){
+    const base64Data=await imageToBase64(imageFile);
+    base64Urls.push(`data:image/jpeg;base64,${base64Data}`);
+  }
+  const prompt=`请仔细识别这些图片中的商品信息。所有图片预期展示同一个商品，请合并正面、背面、底部等图片中的互补信息，返回严格的 JSON 格式（不要包含任何其他文字）：
 
 {
+  "sameProduct": true,
+  "conflictReason": "",
   "name": "品名",
   "brand": "品牌",
   "packageSize": 250,
@@ -2984,12 +3005,14 @@ async function recognizePhoto(imageFile){
 }
 
 识别要求：
-1. name（品名）：提取商品的具体名称，如"洗面奶"、"洗发水"、"牙膏"等，要简洁准确
-2. brand（品牌）：提取品牌名称，如"可复美"、"多芬"等。如果图片中没有品牌信息，返回空字符串 ""
-3. packageSize（单件容量）：提取单件/单包的容量数字，如 250、100、500 等。只返回数字，不要单位
-4. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
-5. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
-6. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回。如果图片中没有保质期相关信息或完全无法识别，返回 null
+1. sameProduct（是否为同一商品）：如果所有图片能归属于同一个商品，返回 true；如果品牌、品名、规格或其他关键信息显示它们是不同商品，返回 false
+2. conflictReason（冲突原因）：sameProduct 为 false 时简洁说明冲突，否则返回空字符串 ""
+3. name（品名）：提取商品的具体名称，如"洗面奶"、"洗发水"、"牙膏"等，要简洁准确
+4. brand（品牌）：提取品牌名称，如"可复美"、"多芬"等。如果图片中没有品牌信息，返回空字符串 ""
+5. packageSize（单件容量）：提取单件/单包的容量数字，如 250、100、500 等。只返回数字，不要单位
+6. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
+7. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
+8. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回。如果图片中没有保质期相关信息或完全无法识别，返回 null
 
 重要：
 - 只返回 JSON 对象，不要包含 markdown 代码块标记（三个反引号加json等）
@@ -2998,7 +3021,12 @@ async function recognizePhoto(imageFile){
 - 如果只看到保质期/底部/喷码，看不到品名、品牌、容量，不要猜测商品类型，name/brand 返回空字符串，packageSize 返回 0，并在 missingFields 中标记缺失字段
 - expiryEvidence 返回图片中看到的日期原文；如果没有看到日期，返回空字符串
 - missingFields 返回无法从图片中确认的字段名数组
+- 如果图片存在商品冲突，必须返回 sameProduct:false 和具体 conflictReason；其他商品字段使用空字符串、0 或 null，不得把不同商品的信息合成一条
 - 如果某个字段无法识别，使用空字符串、0 或 null，不要编造`;
+  const requestBody=buildVisionRequest(prompt,base64Urls,700);
+  if(!isVisionRequestWithinBudget(requestBody)){
+    throw new Error('图片合计数据过大，超过识别请求限制。请减少照片数量或选择更小的图片后重试。');
+  }
   const controller=new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -3006,7 +3034,7 @@ async function recognizePhoto(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:getOpenRouterHeaders('photo'),
-      body:JSON.stringify(buildVisionRequest(prompt,base64Url,700)),
+      body:JSON.stringify(requestBody),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -3072,7 +3100,7 @@ async function recognizeOrder(imageFile){
     const response=await fetch(OPENROUTER_CONFIG.apiUrl,{
       method:'POST',
       headers:getOpenRouterHeaders('order'),
-      body:JSON.stringify(buildVisionRequest(prompt,base64Url,2000)),
+      body:JSON.stringify(buildVisionRequest(prompt,[base64Url],2000)),
       signal:controller.signal
     });
     clearTimeout(timeoutId);
@@ -3174,7 +3202,7 @@ function doScan(type){
       if(type==='photo'){
         clearInterval(_scanTmr);
         document.getElementById('scan-step').textContent='调用AI识别中…';
-        result=await recognizePhoto(file);
+        result=await recognizePhoto([file]);
         if(!hasUsableRecognitionResult(result)){
           throw new Error('识别结果为空，请重试或手动输入');
         }
