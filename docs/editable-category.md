@@ -67,10 +67,20 @@ git diff --check
 ```
 
 - intake 测试结果为 7 项通过、0 项失败。
-- 验证层级为 smoke + touched suite：改动只涉及现有添加表单中的分类选择与保存路径，专项浏览器回归覆盖三个入口，原有 package-type 和 intake 测试覆盖相邻流程，因此足以作为本次本地提交验证。未运行 full regression；剩余风险是未在真实手机 Safari、真实照片上传及已部署版本上验收。
+- 验证层级为 smoke + touched suite：改动只涉及现有添加表单中的分类选择与保存路径，专项浏览器回归覆盖三个入口，原有 package-type 和 intake 测试覆盖相邻流程，因此足以作为本次提交验证。未运行 full regression；剩余风险是未在真实手机 Safari 或真实照片上传路径上验收。
+
+### 正式发布与线上验证
+
+- 发布时间：2026-10-07（KST）。
+- GitHub 分支：`codex/editable-category`，发布前已推送至 `origin/codex/editable-category`。
+- Vercel 正式部署：`dpl_GkNwFT1pb2tSZKsrs83hUDDhhneq`，状态 `READY`。
+- 正式入口：`https://pantry-mng.vercel.app/pantry.html`。
+- 正式域名返回 HTTP 200；线上 `pantry.html` 与本地发布文件的 SHA-256 均为 `f91922e7be1b378a4cebf9504dcdbd5a164a6593a77cb2c79da2d91ba3b02f15`。
+- 在正式入口运行 `scripts/test-editable-category.cjs` 通过：自动建议、手动覆盖、照片/订单确认表单、最终分类保存与回传、物品库分组、订单重置及 320/390/1280 布局均通过。该线上测试拦截全部 API，不调用真实模型，也不写入云库存。
+- 正式页面源码已确认包含 `fi-category`、`mf-category`、`ITEM_CATEGORIES` 和保存最终选择的 `finalCategory` 路径。
 
 ### 适用范围与状态
 
 本文记录适用于当前单 HTML 实现、当前 `DETECT_MAP` 分类来源、现有 `items` JSON 中的 `cat` 字段，以及当前浏览器加载方式。若添加表单、分类映射、同步数据结构、浏览器版本或部署版本变化，本文命令与结论可能过时，需要重新核对。
 
-当前状态：已在本地分支 `codex/editable-category` 验证；本文此次修订时仍未推送或部署。远端 commit 与已部署版本状态由控制任务在后续发布步骤中分别核对。本文不包含私有库存、截图、密钥、token 或凭据。
+当前状态：功能分支已推送 GitHub，并已部署到 Vercel 正式环境；以上状态对应 2026-10-07 的部署与验证时刻，后续发布可能替换线上版本。本文不包含私有库存、截图、密钥、token 或凭据。
