@@ -2808,6 +2808,10 @@ function normalizeExpiryDate(dateStr){
   let match=raw.match(/(\d{2,4})年\s*(\d{1,2})月\s*(\d{1,2})日?/);
   if(match)return buildDate(match[1],match[2],match[3]);
 
+  // iOS 数字键盘无法输入连字符，允许直接输入 YYYYMMDD。
+  match=raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(match)return buildDate(match[1],match[2],match[3]);
+
   match=raw.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
   if(match)return buildDate(match[1],match[2],match[3]);
 
@@ -3479,7 +3483,7 @@ function ensureExpiryInputsVisible(){
     if((el.getAttribute('type')||'').toLowerCase()!=='date')return;
     // 在 iOS 上统一降级为文本输入，避免 date 控件不显示/不可点
     el.setAttribute('type','text');
-    el.setAttribute('placeholder','YYYY-MM-DD');
+    el.setAttribute('placeholder','YYYYMMDD（如 20281124）');
     el.setAttribute('inputmode','numeric');
     el.addEventListener('blur',()=>{
       const v=(el.value||'').trim();
