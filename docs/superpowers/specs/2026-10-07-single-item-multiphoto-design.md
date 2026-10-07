@@ -74,7 +74,7 @@ pendingPhotos = [
 
 The files are not written to local storage or family data. Object URLs exist only for previews.
 
-When recognition starts, photos are preprocessed sequentially to reduce peak memory use on iOS Safari. Each file follows the existing HEIC conversion, orientation handling, canvas resize, and JPEG compression path. The group compressor then checks the encoded request budget and reduces image dimensions/quality as needed. The complete JSON request should remain below a conservative 6.5 MB client budget, leaving room beneath the proxy's 7 MB hard limit. If the group cannot fit while retaining the configured minimum quality, the client stops before networking and asks the user to remove or retake a photo.
+When recognition starts, photos are preprocessed sequentially to reduce peak memory use on iOS Safari. Each file follows the existing HEIC conversion, orientation handling, canvas resize, and JPEG compression path. The current compression bounds become named shared constants so tests can assert them: maximum dimensions `1280 × 1280`, initial JPEG quality `0.7`, minimum JPEG quality `0.4`, and current per-image target `300 KB`. After preprocessing, the client checks the complete encoded request against a conservative 6.5 MB budget, leaving room beneath the proxy's 7 MB hard limit. If the group is still too large at the existing minimum quality, the client stops before networking and asks the user to remove or retake a photo.
 
 The UI keeps the original `File` objects and previews until the attempt succeeds or the user leaves. A network, timeout, parse, or upstream error therefore permits retry without another photo-selection step.
 
@@ -110,7 +110,7 @@ When recognition-review consent is present, the proxy extracts all compressed im
 
 - Existing and new one-photo samples may remain a plain data URL.
 - A multi-photo sample is stored as a JSON-encoded array of data URLs.
-- The admin API normalizes both representations to `imageDataUrls: string[]` while retaining compatibility for consumers that still read the first image.
+- The admin API normalizes both representations to `imageDataUrls: string[]`. Its legacy `imageDataUrl` field remains present and always contains the first image or `null`, so existing admin consumers remain directly testable.
 - Admin review renders each image in the group and makes the group boundary visible.
 
 The review record continues to retain model response, parsed result, accepted data, edited fields, outcome, and error code. Original uncompressed device files are never retained.
