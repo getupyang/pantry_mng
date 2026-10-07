@@ -680,6 +680,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
         <div class="pending-photo-actions">
           <button type="button" id="add-pending-photo" onclick="doScan('photo')">＋ 添加照片</button>
           <button type="button" class="primary" id="start-photo-recognition" onclick="startPendingPhotoRecognition()" disabled>开始识别（请先添加照片）</button>
+          <button type="button" id="reselect-pending-photos" onclick="reselectPendingPhotos()" hidden>重新选择照片</button>
         </div>
       </div>
     </div>
@@ -2608,6 +2609,9 @@ let photoRecognitionBusy=false;
 let pendingPhotoMessage='';
 let pendingPhotoGeneration=0;
 let pendingPhotoReservations=0;
+let pendingPhotoReviewActive=false;
+let pendingPhotoSelectionMode='single';
+let _lastPhotoRecognitionEncodedBytes=0;
 
 function setIntakeMode(mode){
   const next=mode==='multi'?'multi':'single';
@@ -2639,8 +2643,10 @@ function loadPendingPhotoPreview(file){
 }
 
 async function addPendingPhotos(files){
+  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
   const selected=Array.from(files||[]);
   if(!selected.length)return;
+  pendingPhotoSelectionMode=selected.length>1?'multiple':'single';
   const generation=pendingPhotoGeneration;
   const errors=[];
   const ignored=[];
@@ -2676,6 +2682,7 @@ async function addPendingPhotos(files){
 }
 
 function removePendingPhoto(id){
+  if(photoRecognitionBusy||pendingPhotoReviewActive)return;
   const index=pendingPhotos.findIndex(photo=>photo.id===id);
   if(index<0)return;
   const [removed]=pendingPhotos.splice(index,1);
@@ -2690,7 +2697,8 @@ function renderPendingPhotos(){
   const error=document.getElementById('pending-photo-error');
   const addButton=document.getElementById('add-pending-photo');
   const startButton=document.getElementById('start-photo-recognition');
-  if(!grid||!status||!error||!addButton||!startButton)return;
+  const reselectButton=document.getElementById('reselect-pending-photos');
+  if(!grid||!status||!error||!addButton||!startButton||!reselectButton)return;
   grid.replaceChildren();
   pendingPhotos.forEach(photo=>{
     const item=document.createElement('div');
@@ -2703,22 +2711,27 @@ function renderPendingPhotos(){
     remove.className='pending-photo-remove';
     remove.setAttribute('aria-label',`移除照片 ${photo.file.name}`);
     remove.textContent='×';
+    remove.disabled=photoRecognitionBusy||pendingPhotoReviewActive;
     remove.addEventListener('click',()=>removePendingPhoto(photo.id));
     item.append(image,remove);
     grid.appendChild(item);
   });
   const count=pendingPhotos.length;
   status.textContent=photoRecognitionBusy
-    ?`正在准备 ${count} 张照片…`
+    ?`正在识别 ${count} 张照片…`
+    :pendingPhotoReviewActive
+      ?`已识别 ${count} 张照片，请确认商品信息`
     :(count?`已选择 ${count}/${MAX_SINGLE_ITEM_PHOTOS} 张照片`:`尚未添加照片（0/${MAX_SINGLE_ITEM_PHOTOS} 张）`);
   error.textContent=pendingPhotoMessage;
   const atLimit=count>=MAX_SINGLE_ITEM_PHOTOS;
-  addButton.hidden=atLimit;
-  addButton.disabled=atLimit||photoRecognitionBusy;
+  addButton.hidden=atLimit||pendingPhotoReviewActive;
+  addButton.disabled=atLimit||photoRecognitionBusy||pendingPhotoReviewActive;
+  startButton.hidden=pendingPhotoReviewActive;
   startButton.disabled=count===0||photoRecognitionBusy;
   startButton.textContent=photoRecognitionBusy
     ?'正在准备照片…'
     :(count?`开始识别（${count} 张）`:'开始识别（请先添加照片）');
+  reselectButton.hidden=!pendingPhotoReviewActive;
 }
 
 function clearPendingPhotos(){
@@ -2727,17 +2740,92 @@ function clearPendingPhotos(){
   pendingPhotos.forEach(photo=>URL.revokeObjectURL(photo.objectUrl));
   pendingPhotos=[];
   photoRecognitionBusy=false;
+  pendingPhotoReviewActive=false;
+  pendingPhotoSelectionMode='single';
+  _lastPhotoRecognitionEncodedBytes=0;
   pendingPhotoMessage='';
   renderPendingPhotos();
 }
 
-function startPendingPhotoRecognition(){
+function getPhotoRecognitionFailureCategory(error){
+  const message=String(error?.message||error||'').toLowerCase();
+  if(message.includes('数据过大')||message.includes('请求限制')||message.includes('too large'))return 'too_large';
+  if(message.includes('不同商品')||message.includes('无关照片'))return 'mixed_product';
+  if(message.includes('超时')||message.includes('timeout'))return 'timeout';
+  if(message.includes('网络')||message.includes('failed to fetch')||message.includes('network'))return 'network';
+  if(message.includes('解析')||message.includes('结果为空')||message.includes('json'))return 'parse';
+  return 'unknown';
+}
+
+function reselectPendingPhotos(){
+  if(photoRecognitionBusy)return;
+  clearPendingRecognitionReview();
+  clearPendingPhotos();
+  const recogForm=document.getElementById('recog-result');
+  const manualForm=document.getElementById('manual-form');
+  if(recogForm)recogForm.style.display='none';
+  if(manualForm)manualForm.style.display='block';
+}
+
+async function startPendingPhotoRecognition(){
   if(photoRecognitionBusy||pendingPhotos.length===0)return;
+  const generation=pendingPhotoGeneration;
+  const files=pendingPhotos.map(photo=>photo.file);
+  const imageCount=files.length;
+  const fileSize=files.reduce((total,file)=>total+(Number(file.size)||0),0);
+  if(_currentRecognitionReviewId&&_acceptedRecognitionItems.length===0)clearPendingRecognitionReview();
   photoRecognitionBusy=true;
-  pendingPhotoMessage='照片已准备好，识别功能将在下一步接入。';
+  pendingPhotoReviewActive=false;
+  pendingPhotoMessage='';
   renderPendingPhotos();
-  photoRecognitionBusy=false;
-  renderPendingPhotos();
+  const overlay=document.getElementById('scan-ov');
+  document.getElementById('scan-lbl').textContent='拍照识别中';
+  document.getElementById('scan-step').textContent='合并分析照片…';
+  overlay.classList.add('show');
+  trackEvent('scan_start',{reqType:'photo',imageCount,fileSize,selectionMode:pendingPhotoSelectionMode});
+  try{
+    const result=await recognizePhoto(files);
+    if(generation!==pendingPhotoGeneration){
+      clearPendingRecognitionReview();
+      return;
+    }
+    if(result?.sameProduct===false){
+      const reason=result.conflictReason||'照片可能不是同一件商品';
+      pendingPhotoMessage=`${reason}。请移除无关照片后重试。`;
+      document.getElementById('recog-result').style.display='none';
+      document.getElementById('manual-form').style.display='block';
+      showError(pendingPhotoMessage);
+      trackEvent('scan_error',{reqType:'photo',message:pendingPhotoMessage.slice(0,120),imageCount,failureCategory:'mixed_product'});
+      return;
+    }
+    if(!hasUsableRecognitionResult(result))throw new Error('识别结果为空或无法解析，请直接重试');
+    pendingPhotoReviewActive=true;
+    fillRecognitionResult(result);
+    trackEvent('scan_success',{
+      reqType:'photo',
+      reviewId:_currentRecognitionReviewId,
+      count:1,
+      imageCount,
+      encodedBytes:_lastPhotoRecognitionEncodedBytes
+    });
+  }catch(err){
+    if(generation!==pendingPhotoGeneration)return;
+    const errorMsg=String(err?.message||'识别失败，请重试');
+    pendingPhotoMessage=`${errorMsg}；照片已保留，可直接重试。`;
+    showError(pendingPhotoMessage);
+    trackEvent('scan_error',{
+      reqType:'photo',
+      message:errorMsg.slice(0,120),
+      imageCount,
+      failureCategory:getPhotoRecognitionFailureCategory(err)
+    });
+  }finally{
+    if(generation===pendingPhotoGeneration){
+      photoRecognitionBusy=false;
+      overlay.classList.remove('show');
+      renderPendingPhotos();
+    }
+  }
 }
 
 function hasRecognitionReviewConsent(){
@@ -3215,6 +3303,7 @@ async function recognizePhoto(imageFiles){
 - 如果图片存在商品冲突，必须返回 sameProduct:false 和具体 conflictReason；其他商品字段使用空字符串、0 或 null，不得把不同商品的信息合成一条
 - 如果某个字段无法识别，使用空字符串、0 或 null，不要编造`;
   const requestBody=buildVisionRequest(prompt,base64Urls,700);
+  _lastPhotoRecognitionEncodedBytes=new TextEncoder().encode(JSON.stringify(requestBody)).byteLength;
   if(!isVisionRequestWithinBudget(requestBody)){
     throw new Error('图片合计数据过大，超过识别请求限制。请减少照片数量或选择更小的图片后重试。');
   }
@@ -3656,7 +3745,10 @@ function nav(id){
   // 确保旧页面有active类才能正确执行out动画
   if(c.classList.contains('active')){
     c.classList.add('out');
-    setTimeout(()=>c.classList.remove('active','out'),230);
+    setTimeout(()=>{
+      if(c.id!==_curScr)c.classList.remove('active','out');
+      else c.classList.remove('out');
+    },230);
   }else{
     // 如果旧页面没有active类，直接移除所有类
     c.classList.remove('active','out');

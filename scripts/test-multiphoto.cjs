@@ -20,6 +20,11 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const errors = [];
     let recognitionCalls = 0;
+    const recognitionBodies = [];
+    const usageEvents = [];
+    const reviewUpdates = [];
+    let recognitionMode = 'success';
+    let recognitionDelayMs = 0;
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
       localStorage.setItem('pantry_deduct_v4', String(Date.now()));
@@ -45,6 +50,51 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     });
     await page.route('**/api/**', route => {
       const url = new URL(route.request().url());
+      if (url.pathname === '/api/openrouter') {
+        recognitionCalls += 1;
+        recognitionBodies.push(JSON.parse(route.request().postData() || '{}'));
+        if (recognitionMode === 'network') return route.abort('failed');
+        const success = {
+          pantryReviewId: `review-${recognitionCalls}`,
+          choices: [{ message: { content: JSON.stringify({
+            sameProduct: true,
+            conflictReason: '',
+            name: '测试洗发水',
+            brand: '测试品牌',
+            packageSize: 300,
+            unit: 'ml',
+            qty: 1,
+            expiryDate: '2028-10-01',
+            expiryEvidence: 'EXP 10/2028',
+            missingFields: []
+          }) } }]
+        };
+        const conflict = {
+          pantryReviewId: `review-${recognitionCalls}`,
+          choices: [{ message: { content: 'sameProduct： "false"\nconflictReason：照片中是不同商品' } }]
+        };
+        const parseFailure = {
+          pantryReviewId: `review-${recognitionCalls}`,
+          choices: [{ message: { content: recognitionMode === 'empty' ? '' : 'not valid recognition output' } }]
+        };
+        const response = recognitionMode === 'conflict'
+          ? conflict
+          : (recognitionMode === 'parse' || recognitionMode === 'empty') ? parseFailure : success;
+        return new Promise(resolve => setTimeout(resolve, recognitionDelayMs)).then(() => route.fulfill({
+          status: recognitionMode === 'server' ? 503 : 200,
+          contentType: 'application/json',
+          body: recognitionMode === 'server' ? JSON.stringify({ error: { message: 'service unavailable' } }) : JSON.stringify(response)
+        }));
+      }
+      if (url.pathname === '/api/usage-event') {
+        const payload = JSON.parse(route.request().postData() || '{}');
+        usageEvents.push(payload);
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+      if (url.pathname === '/api/recognition-review') {
+        reviewUpdates.push(JSON.parse(route.request().postData() || '{}'));
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
       if (url.pathname === '/api/families/ensure') {
         return route.fulfill({
           status: 200,
@@ -279,8 +329,130 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(await page.locator('#start-photo-recognition').isDisabled(), true);
     assert.match(await page.locator('#pending-photo-status').innerText(), /尚未添加|0\/3/);
     assert.equal(recognitionCalls, 0);
+
+    await page.evaluate(() => {
+      imageToBase64 = async file => btoa(file.name);
+    });
+    chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
+    await page.locator('#photo-intake-entry').click();
+    chooser = await chooserPromise;
+    await chooser.setFiles([image('front-success.png'), image('expiry-success.png')]);
+    await page.waitForFunction(() => pendingPhotos.length === 2);
+    assert.equal(recognitionCalls, 0, 'selecting two files still makes no recognition request');
+
+    recognitionDelayMs = 150;
+    await page.locator('#start-photo-recognition').click();
+    await page.waitForFunction(() => photoRecognitionBusy === true);
+    await page.evaluate(() => startPendingPhotoRecognition());
+    assert.equal(await page.locator('#scan-ov').getAttribute('class'), 'scan-ov show', 'overlay appears only after explicit start');
+    assert.match(await page.locator('#pending-photo-status').innerText(), /识别|处理中|准备/);
+    assert.equal(await page.locator('#add-pending-photo').isDisabled(), true, 'add is locked while recognition is pending');
+    assert.equal(await page.locator('#start-photo-recognition').isDisabled(), true, 'start is locked while recognition is pending');
+    assert.equal(await page.locator('.pending-photo-remove:not([disabled])').count(), 0, 'remove controls are locked while recognition is pending');
+    await page.waitForFunction(() => photoRecognitionBusy === false);
+    assert.equal(recognitionCalls, 1, 'double start produces one request');
+    const imageEntries = recognitionBodies[0].messages[0].content.filter(entry => entry.type === 'image_url');
+    assert.deepEqual(
+      imageEntries.map(entry => entry.image_url.url),
+      ['data:image/jpeg;base64,' + Buffer.from('front-success.png').toString('base64'), 'data:image/jpeg;base64,' + Buffer.from('expiry-success.png').toString('base64')],
+      'both images are sent exactly once and in selection order'
+    );
+    assert.equal(await page.locator('#fi-name').inputValue(), '测试洗发水', 'successful recognition fills the existing confirmation form');
+    assert.equal(await page.locator('#recog-result').isVisible(), true);
+    assert.equal(await page.locator('.pending-photo').count(), 2, 'successful review keeps the thumbnail strip visible');
+    assert.equal(await page.locator('.pending-photo-remove:not([disabled])').count(), 0, 'review thumbnails are read-only');
+    assert.equal(await page.locator('#reselect-pending-photos').isVisible(), true, 'review offers reselect');
+
+    await page.evaluate(() => reselectPendingPhotos());
+    assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'reselect discards the current photo group');
+    assert.equal(await page.locator('#recog-result').isHidden(), true);
+    assert.equal(await page.locator('#add-pending-photo').isVisible(), true, 'reselect returns to editable collection');
+    await page.waitForTimeout(30);
+    assert.equal(reviewUpdates.some(update => update.reviewId === 'review-1' && update.outcome === 'discarded'), true, 'reselect marks an unaccepted review discarded');
+
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([
+        new File([bytes], 'retry-front.png', { type: 'image/png' }),
+        new File([bytes], 'retry-expiry.png', { type: 'image/png' })
+      ]);
+    }, png.toString('base64'));
+    const retryUrls = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+    recognitionMode = 'server';
+    recognitionDelayMs = 0;
+    await page.locator('#start-photo-recognition').click();
+    await page.waitForFunction(() => photoRecognitionBusy === false);
+    assert.deepEqual(await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl)), retryUrls, 'retryable server failure preserves photos');
+    assert.equal(await page.locator('#start-photo-recognition').isEnabled(), true, 'busy state resets after failure');
+    assert.match(await page.locator('#pending-photo-error').innerText(), /service unavailable|失败|重试/);
+
+    for (const mode of ['network', 'timeout', 'parse', 'empty']) {
+      recognitionMode = mode;
+      recognitionDelayMs = mode === 'timeout' ? 100 : 0;
+      if (mode === 'timeout') await page.evaluate(() => {
+        window.__recognitionFetch = window.fetch;
+        window.fetch = (url, options) => String(url).includes('/api/openrouter')
+          ? Promise.reject(new DOMException('timed out', 'AbortError'))
+          : window.__recognitionFetch(url, options);
+      });
+      const before = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+      await page.evaluate(() => startPendingPhotoRecognition());
+      await page.waitForFunction(() => photoRecognitionBusy === false);
+      assert.deepEqual(await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl)), before, `${mode} failure preserves photos`);
+      assert.equal(await page.locator('#start-photo-recognition').isEnabled(), true, `${mode} failure permits retry`);
+      if (mode === 'timeout') await page.evaluate(() => { window.fetch = window.__recognitionFetch; });
+    }
+
+    recognitionMode = 'conflict';
+    recognitionDelayMs = 0;
+    await page.locator('#start-photo-recognition').click();
+    await page.waitForFunction(() => photoRecognitionBusy === false);
+    assert.equal(await page.locator('#recog-result').isHidden(), true, 'conflicting photos do not populate a merged result');
+    assert.equal(await page.locator('.pending-photo').count(), 2, 'conflict preserves thumbnails');
+    assert.match(await page.locator('#pending-photo-error').innerText(), /不同商品|移除.*无关/);
+
+    recognitionMode = 'success';
+    await page.locator('#start-photo-recognition').click();
+    await page.waitForFunction(() => photoRecognitionBusy === false && document.querySelector('#recog-result').style.display === 'block');
+    await page.locator('#fi-package-type').selectOption('regular');
+    const saveUrls = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+    await page.getByRole('button', { name: '确认录入 →' }).click();
+    assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'accepted save clears pending photos');
+    assert.equal(await page.evaluate(urls => urls.every(url => window.__revokedObjectUrls.includes(url)), saveUrls), true, 'accepted save revokes every preview');
+    await page.waitForTimeout(50);
+    const acceptedReview = reviewUpdates.find(update => update.outcome === 'accepted');
+    assert.equal(Boolean(acceptedReview), true, 'accepted save records accepted review data');
+    assert.equal(reviewUpdates.some(update => update.reviewId === acceptedReview.reviewId && update.outcome === 'discarded'), false, 'accepted review is not later discarded');
+
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'abandon.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    const abandonUrl = await page.evaluate(() => pendingPhotos[0].objectUrl);
+    await page.evaluate(() => nav('scr-home'));
+    assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'abandoning intake clears pending photos');
+    assert.equal(await page.evaluate(url => window.__revokedObjectUrls.includes(url), abandonUrl), true, 'abandoning intake revokes its preview');
+
+    await page.waitForTimeout(100);
+    const photoEvents = usageEvents.filter(event => ['scan_start', 'scan_success', 'scan_error'].includes(event.eventName));
+    assert.equal(photoEvents.some(event => JSON.stringify(event).includes('.png') || JSON.stringify(event).includes('data:image')), false, 'analytics never contain filenames or image content');
+    const startEvent = photoEvents.find(event => event.eventName === 'scan_start');
+    assert.deepEqual(
+      { reqType: startEvent.properties.reqType, imageCount: startEvent.properties.imageCount, fileSize: startEvent.properties.fileSize, selectionMode: startEvent.properties.selectionMode },
+      { reqType: 'photo', imageCount: 2, fileSize: png.length * 2, selectionMode: 'multiple' }
+    );
+    const successEvent = photoEvents.find(event => event.eventName === 'scan_success');
+    assert.equal(successEvent.properties.imageCount, 2);
+    assert.equal(successEvent.properties.encodedBytes > 0, true);
+    const errorEvents = photoEvents.filter(event => event.eventName === 'scan_error');
+    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'unknown'), true);
+    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'mixed_product'), true);
+    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'network'), true);
+    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'timeout'), true, JSON.stringify(errorEvents.map(event => event.properties.failureCategory)));
+    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'parse'), true);
     assert.deepEqual(errors, [], 'no browser runtime errors');
-    console.log('PASS: consent gate, async-safe 3-photo collection, MIME validation, URL cleanup, cancellation, order entry, responsive layout');
+    console.log('PASS: collection, explicit recognition, retry/conflict handling, review lifecycle, analytics, cleanup');
   } finally {
     await browser.close();
   }
