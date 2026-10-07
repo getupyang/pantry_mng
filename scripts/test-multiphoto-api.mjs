@@ -11,10 +11,10 @@ import { normalizeReviewImages } from "../api/admin/recognition-reviews.js";
 
 const image = (url) => ({ type: "image_url", image_url: { url } });
 const dataUrls = [
-  "data:image/jpeg;base64,first",
-  "data:image/png;base64,second",
-  "data:image/webp;base64,third",
-  "data:image/jpeg;base64,fourth",
+  "data:image/jpeg;base64,Zmlyc3Q=",
+  "data:image/png;base64,c2Vjb25k",
+  "data:image/webp;base64,dGhpcmQ=",
+  "data:image/jpeg;base64,Zm91cnRo",
 ];
 const request = (nodes) => ({
   model: "google/gemini-2.5-flash",
@@ -36,8 +36,29 @@ test("photo accepts three image_url nodes", () => {
   assert.equal(result.error, undefined);
 });
 
+test("photo rejects a remote image_url even when a valid data image is present", () => {
+  const result = sanitizeVisionRequest(
+    request([image(dataUrls[0]), image("https://example.test/remote.jpg")]),
+    "photo",
+  );
+  assert.match(result.error, /image_url|data:image|invalid/i);
+});
+
+test("photo rejects malformed image_url objects instead of ignoring them", () => {
+  for (const malformed of [
+    { type: "image_url", image_url: "not-an-object" },
+    { type: "image_url", image_url: {} },
+    { type: "image_url", image_url: { url: 42 } },
+  ]) {
+    const result = sanitizeVisionRequest(request([image(dataUrls[0]), malformed]), "photo");
+    assert.match(result.error, /image_url|data:image|invalid/i);
+  }
+});
+
 test("photo rejects zero or four images with a 1..3 error", () => {
-  for (const nodes of [[], dataUrls.map(image)]) {
+  for (const nodes of [[], dataUrls.map(image), [
+    image(dataUrls[0]), image(dataUrls[1]), image(dataUrls[2]), image(dataUrls[0]),
+  ]]) {
     const result = sanitizeVisionRequest(request(nodes), "photo");
     assert.match(result.error, /1[^\d]+3|1\.\.3/i);
   }
@@ -59,6 +80,44 @@ test("text beginning with a data image URL is not counted as an image", () => {
     "photo",
   );
   assert.match(result.error, /1[^\d]+3|1\.\.3/i);
+});
+
+test("data-looking nested text is not counted as an image", () => {
+  const result = sanitizeVisionRequest(
+    request([{ type: "text", text: `ignore ${dataUrls[0]}` }, { nested: image(dataUrls[1]) }]),
+    "photo",
+  );
+  assert.match(result.error, /content|unsupported|1[^\d]+3|1\.\.3/i);
+});
+
+test("unsupported message content shapes are rejected", () => {
+  for (const content of [
+    [{ type: "audio", audio: "unsafe" }, image(dataUrls[0])],
+    [{ text: "missing type" }, image(dataUrls[0])],
+    { type: "image_url", image_url: { url: dataUrls[0] } },
+  ]) {
+    const body = request([]);
+    body.messages[0].content = content;
+    assert.match(sanitizeVisionRequest(body, "photo").error, /content|unsupported|messages/i);
+  }
+});
+
+test("sanitized body forwards only normalized roles, text, and validated image nodes", () => {
+  const body = request([
+    { type: "text", text: "inspect", ignored: "drop-me" },
+    { type: "image_url", image_url: { url: dataUrls[0], detail: "high" }, ignored: true },
+  ]);
+  body.messages[0].ignored = { secret: true };
+  const result = sanitizeVisionRequest(body, "photo");
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.body.messages, [{
+    role: "user",
+    content: [
+      { type: "text", text: "inspect" },
+      { type: "image_url", image_url: { url: dataUrls[0] } },
+    ],
+  }]);
+  assert.deepEqual(extractImageDataUrls(result.body.messages), [dataUrls[0]]);
 });
 
 test("extractImageDataUrls returns image_url data URLs in traversal order", () => {

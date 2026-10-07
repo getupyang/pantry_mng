@@ -691,7 +691,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       </button>
       <div class="future-batch-message" id="future-physical-batch" role="note">多件实物的批量拍摄将在后续开放；现在可先使用订单截图。</div>
     </div>
-    <div class="photo-guide">
+    <div class="photo-guide" id="single-photo-guide">
       <div class="photo-guide-hd">
         <div class="photo-guide-title">拍照示例</div>
         <div class="photo-guide-chip">内测识别</div>
@@ -2673,10 +2673,12 @@ function setIntakeMode(mode){
   const multiButton=document.getElementById('intake-mode-multi');
   const singlePanel=document.getElementById('single-intake-panel');
   const multiPanel=document.getElementById('multi-intake-panel');
+  const photoGuide=document.getElementById('single-photo-guide');
   if(singleButton)singleButton.setAttribute('aria-pressed',String(next==='single'));
   if(multiButton)multiButton.setAttribute('aria-pressed',String(next==='multi'));
   if(singlePanel)singlePanel.hidden=next!=='single';
   if(multiPanel)multiPanel.hidden=next!=='multi';
+  if(photoGuide)photoGuide.hidden=next!=='single';
 }
 
 function loadPendingPhotoPreview(file){
@@ -2861,6 +2863,14 @@ function reselectPendingPhotos(){
 
 async function startPendingPhotoRecognition(){
   if(isRecognitionFlowLocked()||pendingPhotos.length===0)return;
+  if(!cloudReady||typeof pantryFamilyId!=='string'||!pantryFamilyId.trim()){
+    renderCloudStatus();
+    showError(cloudState==='connecting'
+      ?'正在连接云端，连接完成后可重试识别；照片已保留。'
+      :'云端连接失败，请重试连接后再识别；照片已保留。');
+    renderPendingPhotos();
+    return;
+  }
   const generation=pendingPhotoGeneration;
   const files=pendingPhotos.map(photo=>photo.file);
   const imageCount=files.length;
@@ -3208,13 +3218,11 @@ function normalizeRecognitionUnit(unit){
 function postProcessRecognitionResult(result){
   const parsed=result&&typeof result==='object'?result:{};
   const hasSameProduct=Object.prototype.hasOwnProperty.call(parsed,'sameProduct');
-  if(!hasSameProduct){
-    parsed.sameProduct=true;
-  }else if(typeof parsed.sameProduct==='string'){
+  if(hasSameProduct&&typeof parsed.sameProduct==='string'){
     const normalizedSameProduct=parsed.sameProduct.trim().toLowerCase();
     if(normalizedSameProduct==='true')parsed.sameProduct=true;
     else parsed.sameProduct=false;
-  }else if(typeof parsed.sameProduct!=='boolean'){
+  }else if(hasSameProduct&&typeof parsed.sameProduct!=='boolean'){
     parsed.sameProduct=false;
   }
   parsed.conflictReason=String(parsed.conflictReason??'').trim().slice(0,500);
@@ -3429,6 +3437,14 @@ async function recognizePhoto(imageFiles,options={}){
     }
     const result=await response.json();
     const parsed=parseRecognitionResult(result);
+    if(!Object.prototype.hasOwnProperty.call(parsed,'sameProduct')){
+      if(imageFiles.length===1){
+        parsed.sameProduct=true;
+      }else{
+        parsed.sameProduct=false;
+        parsed.conflictReason='模型未确认这些照片属于同一件商品，请重试、移除照片或改为手动录入';
+      }
+    }
     Object.defineProperties(parsed,{
       _recognitionReviewId:{value:result.pantryReviewId||null,enumerable:false},
       _recognitionEncodedBytes:{value:encodedBytes,enumerable:false}

@@ -122,6 +122,18 @@ node scripts/test-photo-live.cjs /absolute/path/controlled-12-front.jpg /absolut
 
 未设置 `PANTRY_EXPECTED_PACKAGE_SIZE` 时，脚本仍会要求识别规格是正数，并核对云端和本地回读值与识别值一致。脚本会等待显式点击“开始识别”后才调用识别 API，随后选择包装类型、只保存一条记录，并独立执行家庭数据 GET、刷新回读和精确的后台 family/review 图片数量检查。每次运行会创建独立的临时 evidence 目录并输出完整路径，不会复用旧成功文件。它会产生真实模型调用和云端测试数据，不属于默认本地回归。
 
+若要用一组**受控的、明确属于不同商品**的 2–3 张图片验证冲突保护，可开启冲突模式：
+
+```bash
+PANTRY_BASE_URL=https://<preview-or-production-host> \
+PANTRY_ADMIN_TOKEN='<从安全环境注入>' \
+PANTRY_EXPECT_CONFLICT=yes \
+PLAYWRIGHT_MODULE=/Users/getupyang/.agents/skills/gstack/node_modules/playwright \
+node scripts/test-photo-live.cjs /absolute/path/product-a.jpg /absolute/path/product-b.jpg
+```
+
+该模式只适用于已人工确认不匹配的图片；它要求页面显示混合/不确定警告，不出现合并确认表单，不执行 PUT/保存，并核对新家庭保持为空以及后台 review 精确保留全部图片。它仍会产生一次真实模型调用和一条识别审查记录。
+
 ---
 
 ## 如何配置 OpenRouter Key

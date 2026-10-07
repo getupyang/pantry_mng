@@ -147,6 +147,18 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
           pantryReviewId: reviewId,
           choices: [{ message: { content: mode === 'empty' ? '' : 'not valid recognition output' } }]
         };
+        const missingSameProduct = {
+          pantryReviewId: reviewId,
+          choices: [{ message: { content: JSON.stringify({
+            name: '不安全合并结果',
+            brand: '测试品牌',
+            packageSize: 300,
+            unit: 'ml',
+            qty: 1,
+            expiryDate: '2028-10-01',
+            missingFields: []
+          }) } }]
+        };
         const malformedOrder = {
           pantryReviewId: reviewId,
           choices: [{ message: { content: '{ malformed order json' } }]
@@ -155,6 +167,8 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
           ? malformedOrder
           : mode === 'conflict'
           ? conflict
+          : mode === 'missing_same_product'
+          ? missingSameProduct
           : (mode === 'parse' || mode === 'empty') ? parseFailure : success;
         return new Promise(resolve => setTimeout(resolve, plan.delayMs || 0)).then(() => route.fulfill({
           status: mode === 'server' ? 503 : 200,
@@ -194,6 +208,7 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
     const multi = page.getByRole('button', { name: '多件商品', exact: true });
     assert.equal(await single.getAttribute('aria-pressed'), 'true', 'fresh intake defaults to single item');
     assert.equal(await multi.getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.locator('.photo-guide').isVisible(), true, 'photo guide is visible in single-item mode');
 
     await page.locator('#photo-intake-entry').click();
     assert.equal(await page.locator('#sheet').getAttribute('class'), 'sheet show', 'consent sheet appears first');
@@ -220,6 +235,36 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
     assert.equal(await page.locator('#start-photo-recognition').isEnabled(), true);
     assert.equal(await page.locator('#scan-ov').getAttribute('class'), 'scan-ov', 'collecting does not show scan overlay');
     assert.equal(recognitionCalls, 0, 'collecting does not call recognition');
+
+    const offlinePhotoUrls = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+    await page.evaluate(() => startPendingPhotoRecognition());
+    assert.equal(recognitionCalls, 0, 'explicit recognition is blocked while cloud identity is unavailable');
+    assert.deepEqual(await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl)), offlinePhotoUrls, 'cloud gate preserves collected photos');
+    assert.equal(await page.locator('#scan-ov').getAttribute('class'), 'scan-ov', 'cloud gate runs before the recognition overlay');
+    assert.equal(await page.evaluate(() => photoRecognitionBusy), false, 'cloud gate leaves recognition controls unlocked');
+    assert.match(await page.locator('#cloud-status-text').innerText(), /云端连接失败|重试连接|正在连接/);
+
+    recognitionQueue.push({ mode: 'success', reviewId: 'review-cloud-retry' });
+    await page.evaluate(() => {
+      cloudReady = true;
+      pantryFamilyId = 'test-family';
+      renderCloudStatus();
+      return startPendingPhotoRecognition();
+    });
+    assert.equal(recognitionCalls, 1, 'recognition succeeds after cloud identity becomes ready');
+    assert.equal(await page.locator('#recog-result').isVisible(), true);
+    await page.evaluate(async encoded => {
+      reselectPendingPhotos();
+      window.__createdObjectUrls = [];
+      window.__revokedObjectUrls = [];
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([
+        new File([bytes], 'front.png', { type: 'image/png' }),
+        new File([bytes], 'expiry.png', { type: 'image/png' })
+      ]);
+    }, png.toString('base64'));
+    recognitionCalls = 0;
+    recognitionBodies.length = 0;
 
     chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
     await page.locator('#add-pending-photo').click();
@@ -360,6 +405,7 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
     assert.equal(await multi.getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('#single-intake-panel').isHidden(), true);
     assert.equal(await page.locator('#order-intake-entry').isVisible(), true);
+    assert.equal(await page.locator('.photo-guide').isHidden(), true, 'photo guide is hidden in multi-item mode');
     const futureBatch = page.locator('#future-physical-batch');
     assert.match(await futureBatch.innerText(), /实物.*批量拍摄.*后续开放/);
     assert.equal(await futureBatch.evaluate(el => el.matches('button,a,[role=button]') || el.hasAttribute('onclick')), false);
@@ -516,6 +562,13 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
     assert.equal(await page.locator('#recog-result').isHidden(), true, 'conflicting photos do not populate a merged result');
     assert.equal(await page.locator('.pending-photo').count(), 2, 'conflict preserves thumbnails');
     assert.match(await page.locator('#pending-photo-error').innerText(), /不同商品|移除.*无关/);
+
+    recognitionMode = 'missing_same_product';
+    await page.locator('#start-photo-recognition').click();
+    await page.waitForFunction(() => photoRecognitionBusy === false);
+    assert.equal(await page.locator('#recog-result').isHidden(), true, 'missing multi-photo sameProduct never populates a merged result');
+    assert.equal(await page.locator('.pending-photo').count(), 2, 'missing sameProduct preserves thumbnails');
+    assert.match(await page.locator('#pending-photo-error').innerText(), /未确认|同一件商品|重试|手动录入/);
 
     recognitionMode = 'success';
     await page.locator('#start-photo-recognition').click();
@@ -835,7 +888,11 @@ const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminIm
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'mixed_product'), true);
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'network'), true);
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'timeout'), true, JSON.stringify(errorEvents.map(event => event.properties.failureCategory)));
-    assert.equal(errorEvents.some(event => event.properties.failureCategory === 'parse'), true);
+    assert.equal(
+      errorEvents.filter(event => event.properties.failureCategory === 'mixed_product').length >= 2,
+      true,
+      'explicit conflicts and missing multi-photo confirmation are both classified as mixed-product uncertainty'
+    );
 
     await page.goto('http://127.0.0.1:8031/admin.html');
     await page.locator('#token').fill('test-admin-token');

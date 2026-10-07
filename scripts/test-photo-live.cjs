@@ -42,6 +42,13 @@ function parseExpectedPackageSize(value) {
   return size;
 }
 
+function parseExpectedConflict(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'no') return false;
+  if (normalized === 'yes') return true;
+  throw new Error('PANTRY_EXPECT_CONFLICT must be yes or no');
+}
+
 async function createEvidencePaths() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pantry-live-'));
   return {
@@ -76,6 +83,10 @@ async function main() {
   const baseURL = process.env.PANTRY_BASE_URL || 'http://127.0.0.1:8031';
   const adminToken = parseAdminToken(process.env.PANTRY_ADMIN_TOKEN);
   const expectedPackageSize = parseExpectedPackageSize(process.env.PANTRY_EXPECTED_PACKAGE_SIZE);
+  const expectConflict = parseExpectedConflict(process.env.PANTRY_EXPECT_CONFLICT);
+  if (expectConflict && imagePaths.length < 2) {
+    throw new Error('PANTRY_EXPECT_CONFLICT=yes requires 2 to 3 mismatched image paths');
+  }
   const evidencePaths = await createEvidencePaths();
 
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -88,9 +99,11 @@ async function main() {
     const errors = [];
     const responses = [];
     let recognitionRequests = 0;
+    let familyPutRequests = 0;
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
       if (new URL(request.url()).pathname === '/api/openrouter') recognitionRequests += 1;
+      if (request.method() === 'PUT' && new URL(request.url()).pathname.startsWith('/api/families/')) familyPutRequests += 1;
     });
     page.on('response', response => {
       if (response.url().includes('/api/')) {
@@ -118,6 +131,48 @@ async function main() {
     assert.equal(recognitionRequests, 0, 'photos must not call recognition before explicit start');
 
     await page.locator('#start-photo-recognition').click();
+    if (expectConflict) {
+      await page.waitForFunction(() => (
+        photoRecognitionBusy === false &&
+        document.getElementById('pending-photo-error').textContent.trim().length > 0
+      ), {}, { timeout: 180000 });
+      assert.equal(recognitionRequests, 1, 'one recognition request combines the mismatched photos');
+      assert.equal(await page.locator('#recog-result').isHidden(), true, 'conflict must not expose a merged confirmation form');
+      assert.match(await page.locator('#pending-photo-error').innerText(), /不同|冲突|无法确认|同一|移除|重试/);
+      const reviewId = await page.evaluate(() => _currentRecognitionReviewId);
+      assert.ok(reviewId, 'conflict recognition response did not include a review ID');
+      assert.equal(familyPutRequests, 0, 'conflict smoke must not save or PUT family data');
+      const evidence = await page.evaluate(async () => {
+        const response = await fetch('/api/families/' + pantryFamilyId, {
+          headers: { 'X-Client-Id': getOrCreateClientId() }
+        });
+        return {
+          status: response.status,
+          server: await response.json(),
+          clientId: getOrCreateClientId(),
+          familyId: pantryFamilyId,
+          local: JSON.parse(localStorage.getItem(PANTRY_ITEMS_KEY) || '[]')
+        };
+      });
+      assert.equal(evidence.status, 200);
+      assert.equal(evidence.server.data.items.length, 0, 'conflict family must remain empty');
+      assert.equal(evidence.local.length, 0, 'conflict local state must remain empty');
+      const adminResponse = await page.request.get(
+        baseURL + '/api/admin/recognition-reviews?familyId=' + encodeURIComponent(evidence.familyId) + '&limit=80',
+        { headers: { 'X-Admin-Token': adminToken } }
+      );
+      const adminResult = await assertSuccessfulResponse(adminResponse, 'admin recognition-review GET');
+      const adminPayload = JSON.parse(adminResult.body);
+      verifyAdminReview(adminPayload, evidence.familyId, reviewId, imagePaths.length);
+      await page.screenshot({ path: evidencePaths.screenshot, animations: 'disabled' });
+      assert.deepEqual(errors, []);
+      await fs.writeFile(
+        evidencePaths.evidence,
+        JSON.stringify({ mode: 'expected-conflict', reviewId, imageCount: imagePaths.length, ...evidence, responses, errors }, null, 2)
+      );
+      console.log(`PASS expected conflict for ${imagePaths.length} photos, no merge/save, empty family, exact review image count; evidence ${evidencePaths.evidence}; screenshot ${evidencePaths.screenshot}`);
+      return;
+    }
     await page.locator('#recog-result').waitFor({ state: 'visible', timeout: 180000 });
     assert.equal(recognitionRequests, 1, 'one recognition request combines all supplied photos');
     const reviewId = await page.evaluate(() => _currentRecognitionReviewId);
@@ -208,6 +263,7 @@ module.exports = {
   assertSuccessfulResponse,
   createEvidencePaths,
   parseAdminToken,
+  parseExpectedConflict,
   parseExpectedPackageSize,
   validateImagePaths,
   verifyAdminReview

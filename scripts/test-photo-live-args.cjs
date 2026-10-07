@@ -8,6 +8,7 @@ const {
   assertSuccessfulResponse,
   createEvidencePaths,
   parseAdminToken,
+  parseExpectedConflict,
   parseExpectedPackageSize,
   verifyAdminReview,
   validateImagePaths
@@ -67,6 +68,16 @@ test('expected package size is optional but must be a positive number', () => {
   assert.equal(parseExpectedPackageSize('12.5'), 12.5);
   for (const value of ['0', '-1', 'twelve', 'Infinity']) {
     assert.throws(() => parseExpectedPackageSize(value), /PANTRY_EXPECTED_PACKAGE_SIZE/);
+  }
+});
+
+test('conflict smoke mode is parsed only from PANTRY_EXPECT_CONFLICT', () => {
+  assert.equal(parseExpectedConflict(undefined), false);
+  assert.equal(parseExpectedConflict(''), false);
+  assert.equal(parseExpectedConflict('no'), false);
+  assert.equal(parseExpectedConflict(' yes '), true);
+  for (const value of ['true', '1', 'maybe']) {
+    assert.throws(() => parseExpectedConflict(value), /PANTRY_EXPECT_CONFLICT/);
   }
 });
 

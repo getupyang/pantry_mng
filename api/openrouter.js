@@ -56,12 +56,61 @@ export function serializeReviewImages(urls) {
   return urls.length === 1 ? urls[0] : JSON.stringify(urls);
 }
 
-export function sanitizeVisionRequest(body, reqType = "photo") {
-  const messages = Array.isArray(body?.messages) ? body.messages : [];
-  if (!messages.length) {
+function isApprovedImageDataUrl(value) {
+  if (typeof value !== "string") return false;
+  const match = value.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+  return Boolean(match && match[1].length % 4 === 0);
+}
+
+function normalizeVisionMessages(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) {
     return { error: "messages is required" };
   }
-  const imageCount = extractImageDataUrls(messages).length;
+  const normalized = [];
+  let imageCount = 0;
+  for (const message of messages) {
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      return { error: "Invalid messages entry" };
+    }
+    if (!["system", "user", "assistant"].includes(message.role)) {
+      return { error: "Unsupported message role" };
+    }
+    if (typeof message.content === "string") {
+      normalized.push({ role: message.role, content: message.content });
+      continue;
+    }
+    if (!Array.isArray(message.content)) {
+      return { error: "Unsupported message content shape" };
+    }
+    const content = [];
+    for (const item of message.content) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return { error: "Unsupported message content item" };
+      }
+      if (item.type === "text" && typeof item.text === "string") {
+        content.push({ type: "text", text: item.text });
+        continue;
+      }
+      if (item.type === "image_url") {
+        imageCount += 1;
+        const url = item.image_url?.url;
+        if (!isApprovedImageDataUrl(url)) {
+          return { error: "Invalid image_url; expected an approved data:image base64 URL" };
+        }
+        content.push({ type: "image_url", image_url: { url } });
+        continue;
+      }
+      return { error: "Unsupported message content item" };
+    }
+    normalized.push({ role: message.role, content });
+  }
+  return { messages: normalized, imageCount };
+}
+
+export function sanitizeVisionRequest(body, reqType = "photo") {
+  const normalizedMessages = normalizeVisionMessages(body?.messages);
+  if (normalizedMessages.error) return { error: normalizedMessages.error };
+  const { messages, imageCount } = normalizedMessages;
   if (reqType === "order" && imageCount !== 1) {
     return { error: "Order recognition requires exactly 1 image" };
   }

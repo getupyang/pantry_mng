@@ -45,9 +45,9 @@ function recognitionContext(options={}){
     getOpenRouterHeaders:()=>({'Content-Type':'application/json'}),
     fetch:async(...args)=>{
       fetchCalls.push(args);
-      return {ok:true,json:async()=>({choices:[]})};
+      return {ok:true,json:async()=>(options.responseJson||{choices:[]})};
     },
-    parseRecognitionResult:()=>({sameProduct:true,name:'test'}),
+    parseRecognitionResult:options.parseRecognitionResult||(()=>({sameProduct:true,name:'test'})),
     updateRecognitionReview(){},
     _currentRecognitionReviewId:null,
     _currentRecognitionReviewType:null,
@@ -56,6 +56,7 @@ function recognitionContext(options={}){
   });
   vm.runInContext(between('// 图片预处理：压缩和格式转换','function getOpenRouterHeaders('),context);
   context.imageToBase64=imageToBase64;
+  if(options.parseRecognitionResult)context.parseRecognitionResult=options.parseRecognitionResult;
   vm.runInContext(between('async function recognizePhoto(','// 订单截图识别（批量）'),context);
   return {context,fetchCalls,preprocessEvents};
 }
@@ -122,7 +123,7 @@ test('image compression and request budget constants are stable',()=>{
   ]);
 });
 
-test('postProcessRecognitionResult normalizes sameProduct safely and bounds conflictReason',()=>{
+test('postProcessRecognitionResult preserves a missing sameProduct flag for the caller',()=>{
   const {postProcessRecognitionResult}=visionContext();
   assert.equal(postProcessRecognitionResult({sameProduct:true}).sameProduct,true);
   assert.equal(postProcessRecognitionResult({sameProduct:' TRUE '}).sameProduct,true);
@@ -130,7 +131,7 @@ test('postProcessRecognitionResult normalizes sameProduct safely and bounds conf
   const stringFalse=postProcessRecognitionResult({sameProduct:' false '});
   assert.equal(stringFalse.sameProduct,false);
   assert.equal(stringFalse.sameProduct===false,true,'string false must trigger a future strict false guard');
-  assert.equal(postProcessRecognitionResult({}).sameProduct,true,'missing field keeps one-photo compatibility');
+  assert.equal(Object.hasOwn(postProcessRecognitionResult({}),'sameProduct'),false);
   assert.equal(postProcessRecognitionResult({sameProduct:'unknown'}).sameProduct,false);
   assert.equal(postProcessRecognitionResult({sameProduct:null}).sameProduct,false);
 
@@ -138,6 +139,35 @@ test('postProcessRecognitionResult normalizes sameProduct safely and bounds conf
   assert.equal(typeof conflict.conflictReason,'string');
   assert.equal(conflict.conflictReason.length,500);
   assert.equal(conflict.conflictReason,conflict.conflictReason.trim());
+});
+
+test('recognizePhoto accepts missing sameProduct for one photo but fails closed for multiple photos',async()=>{
+  const responseJson={choices:[{message:{content:JSON.stringify({name:'single'})}}]};
+  const one=recognitionContext({responseJson});
+  const oneResult=await one.context.recognizePhoto([{name:'front',base64:'QQ=='}]);
+  assert.equal(oneResult.sameProduct,true);
+  assert.equal(oneResult.name,'single');
+
+  const two=recognitionContext({responseJson});
+  const twoResult=await two.context.recognizePhoto([
+    {name:'front',base64:'QQ=='},
+    {name:'back',base64:'Qg=='}
+  ]);
+  assert.equal(twoResult.sameProduct,false);
+  assert.match(twoResult.conflictReason,/确认|同一|重试|移除/);
+});
+
+test('recognizePhoto accepts explicit true and preserves malformed or explicit false',async()=>{
+  for(const [sameProduct,expected] of [[true,true],[false,false],['unknown',false]]){
+    const harness=recognitionContext({responseJson:{
+      choices:[{message:{content:JSON.stringify({sameProduct,name:'test'})}}]
+    }});
+    const result=await harness.context.recognizePhoto([
+      {name:'front',base64:'QQ=='},
+      {name:'back',base64:'Qg=='}
+    ]);
+    assert.equal(result.sameProduct,expected);
+  }
 });
 
 test('parseRecognitionResult preserves explicit conflicts from non-JSON fallback text',()=>{
