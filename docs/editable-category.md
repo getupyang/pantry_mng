@@ -79,8 +79,20 @@ git diff --check
 - 在正式入口运行 `scripts/test-editable-category.cjs` 通过：自动建议、手动覆盖、照片/订单确认表单、最终分类保存与回传、物品库分组、订单重置及 320/390/1280 布局均通过。该线上测试拦截全部 API，不调用真实模型，也不写入云库存。
 - 正式页面源码已确认包含 `fi-category`、`mf-category`、`ITEM_CATEGORIES` 和保存最终选择的 `finalCategory` 路径。
 
+### 后续部署覆盖与合并处理
+
+- 上述 `dpl_GkNwFT1pb2tSZKsrs83hUDDhhneq` 在 2026-10-07 17:10（KST）完成分类功能发布；随后 `codex/single-item-multiphoto` 在 18:10 部署 `dpl_5ePYiV7swHXK9KXJ2L4ca6iUR6sA`，正式别名被后一次部署接管。
+- 覆盖后的线上 `pantry.html` SHA-256 为 `db782ece10574722a81861b329e63ab1c3c0745b29a686576870ea2bfd51472b`，源码中不再包含 `mf-category` / `fi-category`。因此用户看不到手动分类并非浏览器缓存，而是两个并行分支先后部署造成的版本覆盖。
+- 合并 commit：`3ad0100`（`Merge current multi-photo production baseline`），将当前生产多图分支 `origin/codex/single-item-multiphoto` 合入 `codex/editable-category`，保留两边功能。
+- 合并后本地验证：
+  - `scripts/test-editable-category.cjs`：通过；
+  - `scripts/test-package-type.cjs`：通过；
+  - `node --test scripts/test-multiphoto-api.mjs scripts/test-multiphoto-request.cjs scripts/test-photo-live-args.cjs scripts/test-intake.cjs scripts/test-ios-expiry.cjs`：47/47 通过；
+  - `scripts/test-multiphoto.cjs`：通过收集、明确开始、重试/冲突、review 生命周期、analytics 与清理。
+- 合并验证阶段没有调用真实模型或写入云库存；浏览器测试均使用 mock API。
+
 ### 适用范围与状态
 
 本文记录适用于当前单 HTML 实现、当前 `DETECT_MAP` 分类来源、现有 `items` JSON 中的 `cat` 字段，以及当前浏览器加载方式。若添加表单、分类映射、同步数据结构、浏览器版本或部署版本变化，本文命令与结论可能过时，需要重新核对。
 
-当前状态：功能分支已推送 GitHub，并已部署到 Vercel 正式环境；以上状态对应 2026-10-07 的部署与验证时刻，后续发布可能替换线上版本。本文不包含私有库存、截图、密钥、token 或凭据。
+当前状态：分类功能曾成功部署，但随后被多图分支的正式部署覆盖；合并版本已在本地通过相关回归，等待重新推送和部署。本文不包含私有库存、截图、密钥、token 或凭据。
