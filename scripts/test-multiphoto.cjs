@@ -22,8 +22,20 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     let recognitionCalls = 0;
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
-      localStorage.setItem('pantry_recognition_review_consent', 'yes');
       localStorage.setItem('pantry_deduct_v4', String(Date.now()));
+      window.__createdObjectUrls = [];
+      window.__revokedObjectUrls = [];
+      const createObjectURL = URL.createObjectURL.bind(URL);
+      const revokeObjectURL = URL.revokeObjectURL.bind(URL);
+      URL.createObjectURL = object => {
+        const url = createObjectURL(object);
+        window.__createdObjectUrls.push(url);
+        return url;
+      };
+      URL.revokeObjectURL = url => {
+        window.__revokedObjectUrls.push(url);
+        return revokeObjectURL(url);
+      };
     });
     await page.route('https://fonts.googleapis.com/**', route => route.abort());
     await page.route('https://fonts.gstatic.com/**', route => route.abort());
@@ -57,12 +69,26 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(await single.getAttribute('aria-pressed'), 'true', 'fresh intake defaults to single item');
     assert.equal(await multi.getAttribute('aria-pressed'), 'false');
 
-    let chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
     await page.locator('#photo-intake-entry').click();
+    assert.equal(await page.locator('#sheet').getAttribute('class'), 'sheet show', 'consent sheet appears first');
+    assert.equal(await page.locator('#sh-title').innerText(), '识别样本授权');
+    assert.equal(await page.evaluate(() => _fileInput === null && pendingPhotos.length === 0), true, 'no chooser or collection before consent');
+    assert.equal(await page.evaluate(() => localStorage.getItem(RECOGNITION_REVIEW_CONSENT_KEY)), null);
+
+    let chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
+    await page.locator('#sh-ok').click();
     let chooser = await chooserPromise;
-    assert.equal(await page.locator('input[type=file]').getAttribute('multiple'), '', 'photo chooser accepts multiple files');
+    assert.equal(await page.evaluate(() => localStorage.getItem(RECOGNITION_REVIEW_CONSENT_KEY)), 'yes');
+    assert.equal(await page.locator('#sheet').getAttribute('class'), 'sheet');
+    assert.equal(await page.locator('input[type=file]').getAttribute('multiple'), '', 'consented photo chooser accepts multiple files');
     await chooser.setFiles([image('front.png'), image('expiry.png')]);
     await page.waitForFunction(() => document.querySelectorAll('.pending-photo').length === 2);
+
+    chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
+    await page.locator('#photo-intake-entry').click();
+    chooser = await chooserPromise;
+    assert.equal(await page.locator('input[type=file]').getAttribute('multiple'), '', 'photo chooser accepts multiple files');
+    await page.evaluate(() => _fileInput.oncancel());
     assert.equal(await page.locator('.pending-photo').count(), 2);
     assert.match(await page.locator('#pending-photo-status').innerText(), /已选择 2\/3 张/);
     assert.equal(await page.locator('#start-photo-recognition').isEnabled(), true);
@@ -78,11 +104,23 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.evaluate(async () => addPendingPhotos([new File(['extra'], 'fourth.png', { type: 'image/png' })]));
     assert.equal(await page.locator('.pending-photo').count(), 3, 'fourth image is blocked');
     assert.match(await page.locator('#pending-photo-error').innerText(), /fourth\.png|最多.*3|忽略/);
+    const firstGroupUrls = await page.evaluate(() => [...window.__createdObjectUrls]);
+    assert.equal(firstGroupUrls.length, 3, 'one preview URL is created per accepted photo');
     await page.getByRole('button', { name: '移除照片 front.png' }).click();
     assert.equal(await page.locator('.pending-photo').count(), 2);
+    assert.deepEqual(await page.evaluate(() => [...window.__revokedObjectUrls]), [firstGroupUrls[0]], 'removing one photo revokes only its preview');
     assert.equal(await page.locator('#add-pending-photo').isVisible(), true, 'deleting restores add action');
 
     await page.evaluate(() => clearPendingPhotos());
+    assert.deepEqual(
+      await page.evaluate(() => [...window.__revokedObjectUrls]),
+      firstGroupUrls,
+      'clearing revokes every remaining preview exactly once'
+    );
+    await page.evaluate(() => {
+      window.__createdObjectUrls = [];
+      window.__revokedObjectUrls = [];
+    });
     for (const name of ['camera-1.png', 'camera-2.png']) {
       chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
       await page.locator(name === 'camera-1.png' ? '#photo-intake-entry' : '#add-pending-photo').click();
@@ -139,6 +177,19 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(await page.locator('input[type=file]').getAttribute('multiple'), null, 'order screenshot remains single file');
     await page.evaluate(() => _fileInput.oncancel());
 
+    const pendingBeforeNavigation = await page.evaluate(() => pendingPhotos.map(photo => photo.objectUrl));
+    assert.equal(pendingBeforeNavigation.length, 1);
+    await page.evaluate(() => nav('scr-home'));
+    assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'leaving intake clears collected photos');
+    assert.equal(
+      await page.evaluate(url => window.__revokedObjectUrls.filter(value => value === url).length, pendingBeforeNavigation[0]),
+      1,
+      'navigation cleanup revokes the remaining preview exactly once'
+    );
+    await page.evaluate(() => nav('scr-add'));
+    assert.equal(await single.getAttribute('aria-pressed'), 'true', 'a genuinely fresh intake resets to single item');
+    assert.equal(await multi.getAttribute('aria-pressed'), 'false');
+
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
       await page.evaluate(() => setIntakeMode('single'));
@@ -158,7 +209,7 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.match(await page.locator('#pending-photo-status').innerText(), /尚未添加|0\/3/);
     assert.equal(recognitionCalls, 0);
     assert.deepEqual(errors, [], 'no browser runtime errors');
-    console.log('PASS: single/multi intake, 3-photo collection, validation, cancellation, order entry, responsive layout');
+    console.log('PASS: consent gate, single/multi intake, 3-photo collection, URL cleanup, cancellation, order entry, responsive layout');
   } finally {
     await browser.close();
   }
