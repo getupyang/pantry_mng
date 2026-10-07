@@ -575,11 +575,35 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
 
     await page.evaluate(async encoded => {
       const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      await addPendingPhotos([new File([bytes], 'direct-clear.png', { type: 'image/png' })]);
+    }, png.toString('base64'));
+    recognitionQueue.push({ mode: 'success', delayMs: 250, reviewId: 'review-direct-clear', name: '不应出现的直接清理结果' });
+    await page.evaluate(() => { window.__directClearPromise = startPendingPhotoRecognition(); });
+    await page.waitForFunction(() => photoRecognitionBusy === true);
+    const directClearUrl = await page.evaluate(() => pendingPhotos[0].objectUrl);
+    await page.evaluate(() => clearPendingPhotos());
+    assert.deepEqual(await page.evaluate(() => ({
+      activeAttempt: activeRecognitionAttempt,
+      busy: photoRecognitionBusy,
+      photos: pendingPhotos.length,
+      overlay: document.getElementById('scan-ov').className,
+      startDisabled: document.getElementById('start-photo-recognition').disabled
+    })), { activeAttempt: null, busy: false, photos: 0, overlay: 'scan-ov', startDisabled: true }, 'direct clear cancels and fully unlocks an active photo attempt');
+    assert.equal(await page.evaluate(url => window.__revokedObjectUrls.includes(url), directClearUrl), true, 'direct clear revokes the active photo preview');
+    await page.evaluate(() => window.__directClearPromise);
+
+    await page.evaluate(async encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
       await addPendingPhotos([new File([bytes], 'abandon-review.png', { type: 'image/png' })]);
     }, png.toString('base64'));
     recognitionQueue.push({ mode: 'success', delayMs: 0, reviewId: 'review-abandon-active', name: '洗发水旧结果' });
     await page.evaluate(() => startPendingPhotoRecognition());
     assert.equal(await page.locator('#recog-result').isVisible(), true);
+    await page.evaluate(() => {
+      const location=document.getElementById('fi-location');
+      location.append(new Option('浴室', 'bathroom'));
+      location.value='bathroom';
+    });
     await page.evaluate(() => nav('scr-home'));
     await page.evaluate(() => nav('scr-add'));
     assert.deepEqual(await page.evaluate(() => ({
@@ -589,8 +613,9 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       orderItems: window._orderItems ?? null,
       formVisible: document.getElementById('recog-result').style.display === 'block',
       fieldName: document.getElementById('fi-name').value,
+      location: document.getElementById('fi-location').value,
       lastDetected: _lastDetected
-    })), { reviewId: null, parsed: null, photos: 0, orderItems: null, formVisible: false, fieldName: '', lastDetected: null }, 'abandoning an active review returns to a fresh intake');
+    })), { reviewId: null, parsed: null, photos: 0, orderItems: null, formVisible: false, fieldName: '', location: '', lastDetected: null }, 'abandoning an active review returns to a fresh intake');
 
     await page.evaluate(async encoded => {
       const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
@@ -601,6 +626,10 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.waitForFunction(() => photoRecognitionBusy === true);
     await page.evaluate(() => nav('scr-home'));
     await page.evaluate(() => nav('scr-add'));
+    assert.deepEqual(await page.evaluate(() => ({
+      overlay: document.getElementById('scan-ov').className,
+      timer: _scanTmr
+    })), { overlay: 'scan-ov', timer: null }, 'leaving during pending photo clears overlay and scan timer');
     await page.evaluate(() => window.__abandonPendingPromise);
     await page.waitForTimeout(300);
     assert.deepEqual(await page.evaluate(() => ({
@@ -649,6 +678,29 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.waitForTimeout(30);
     assert.equal(usageEvents.some(event => event.eventName === 'item_add' && event.properties.reviewId === 'review-photo-after-order' && event.properties.source === 'photo'), true, 'photo after cancelled order keeps photo source attribution');
     assert.equal(reviewUpdates.some(update => update.reviewId === 'review-photo-after-order' && update.outcome === 'accepted'), true, 'photo review is accepted after cancelled order');
+
+    await page.evaluate(() => nav('scr-add'));
+    await page.evaluate(() => {
+      cloudReady = true;
+      pantryFamilyId = 'test-family';
+      setIntakeMode('multi');
+    });
+    recognitionQueue.push({ mode: 'success', type: 'order', delayMs: 250, reviewId: 'review-abandon-order', name: '不应出现的离开订单' });
+    await page.evaluate(encoded => {
+      const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+      window.__abandonOrderPromise = startOrderRecognition(new File([bytes], 'order-abandon.png', { type: 'image/png' }));
+    }, png.toString('base64'));
+    await page.waitForFunction(() => orderRecognitionBusy === true);
+    await page.evaluate(() => nav('scr-home'));
+    await page.evaluate(() => nav('scr-add'));
+    assert.deepEqual(await page.evaluate(() => ({
+      overlay: document.getElementById('scan-ov').className,
+      timer: _scanTmr,
+      busy: orderRecognitionBusy,
+      orderItems: window._orderItems ?? null,
+      controlsEnabled: ['photo-intake-entry','intake-mode-single','intake-mode-multi','order-intake-entry'].every(id => !document.getElementById(id).disabled)
+    })), { overlay: 'scan-ov', timer: null, busy: false, orderItems: null, controlsEnabled: true }, 'leaving during pending order clears overlay, timer, state, and locks');
+    await page.evaluate(() => window.__abandonOrderPromise);
 
     await page.waitForTimeout(100);
     const photoEvents = usageEvents.filter(event => ['scan_start', 'scan_success', 'scan_error'].includes(event.eventName));
