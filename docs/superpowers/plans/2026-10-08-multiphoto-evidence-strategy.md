@@ -25,19 +25,7 @@
 
 Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multiphoto`. Stage only task files; do not touch the dirty main worktree.
 
-### Task 0: Freeze the private labels and stratified split before strategy code
-
-**Files (local only):**
-- Create: `/private/tmp/pantry-multiphoto-manifest.json`
-- Create: `/private/tmp/pantry-multiphoto-split.json`
-
-- [ ] Export/read all 16 authorized review rows using the existing read-only audit path. Do not change the multi-photo prompt, parser, resolver, model route, or product code first.
-- [ ] Inspect every image and label each scored field as `visible-supported`, `user-provided/non-visual`, `preference-only`, or `unknown`, with `expected`, frozen `allowedAliases`, evidence image indexes, reviewer, reason, and complement marker. Do not infer visual truth from `acceptedData` alone.
-- [ ] Require at least 6 audited records, at least 2 multi-photo records, and at least 1 ambiguity/conflict record. If this cannot be met, stop before implementation and report the missing evidence.
-- [ ] Produce a stable SHA-256 over the manifest, then generate a stratified 25% holdout containing at least one audited multi-photo case. Save IDs and hashes in the private split file. From this point until the candidate is frozen, inspect only dev-split scores.
-- [ ] Record only counts and hashes in the eventual public release note; never copy images, OCR, model text, accepted user values, or the private manifest into Git.
-
-### Task 1: TDD the generic replay scorer before feature implementation
+### Task 0: TDD the generic replay scorer before touching real labels
 
 **Files:**
 - Create: `scripts/test-replay-multiphoto-cases.mjs`
@@ -46,9 +34,21 @@ Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multi
 - [ ] Define the private manifest CLI: `node scripts/replay-multiphoto-cases.mjs --manifest <absolute-json> --split <absolute-json> --phase dev|holdout --output <absolute-dir> [--dry-run]`. The manifest schema includes case ID, image references, per-field label/expected/aliases/evidence indexes, complement marker, and split metadata; it contains no embedded base64.
 - [ ] Write failing synthetic tests for schema validation, label normalization, frozen aliases, split/hash verification, best-single tie-break, complement gain, per-case non-regression, catastrophic errors, repeat stability, exact model/provider, cost sum, private report paths, and exit codes.
 - [ ] Run `node --test scripts/test-replay-multiphoto-cases.mjs` and verify RED because the scorer is not implemented.
-- [ ] Implement `--dry-run` scoring from synthetic saved responses and live mode through the existing authenticated local API path. Write JSON + Markdown reports to the requested absolute output directory. Exit `0` only when every hard gate passes; exit nonzero for invalid manifest/hash/split, a per-case gate failure, route instability, cost overflow, or API error.
+- [ ] Implement `--dry-run` scoring from synthetic saved responses and live mode against an explicit `--base-url`. Write JSON + Markdown reports to the requested absolute output directory. Exit `0` only when every hard gate passes; exit nonzero for invalid manifest/hash/split, a per-case gate failure, route instability, cost overflow, or API error.
 - [ ] Run the same test command and verify GREEN. Run `--phase dev --dry-run` on a synthetic manifest and verify both pass and fail fixtures produce the documented exit codes.
 - [ ] Commit only the generic harness and synthetic fixtures, never real labels or responses.
+
+### Task 1: Freeze the private labels and stratified split before strategy code
+
+**Files (local only):**
+- Create: `/private/tmp/pantry-multiphoto-manifest.json`
+- Create: `/private/tmp/pantry-multiphoto-split.json`
+
+- [ ] Export/read all 16 authorized review rows using the existing read-only audit path. Do not change the multi-photo prompt, parser, resolver, model route, or product code first.
+- [ ] Inspect every image and label each scored field using the canonical Task 0 schema as `visible-supported`, `user-provided/non-visual`, `preference-only`, or `unknown`, with `expected`, frozen `allowedAliases`, evidence image indexes, reviewer, reason, and complement marker. Do not infer visual truth from `acceptedData` alone.
+- [ ] Require at least 6 audited records, at least 2 multi-photo records, and at least 1 ambiguity/conflict record. If this cannot be met, stop before implementation and report the missing evidence.
+- [ ] Use the Task 0 canonical serializer/hash and split implementation to produce a stable manifest SHA-256 and stratified 25% holdout containing at least one audited multi-photo case. Save IDs, algorithm version, and hashes in the private split file. From this point until the candidate is frozen, inspect only dev-split scores.
+- [ ] Run the Task 0 verifier against both private files before starting Task 2. Record only counts and hashes in the eventual public release note; never copy images, OCR, model text, accepted user values, or the private manifest into Git.
 
 ### Task 2: Pure evidence contract and deterministic resolver
 
@@ -71,7 +71,7 @@ Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multi
 - Modify: `scripts/test-multiphoto.cjs`
 
 - [ ] Extend mocked recognition responses and write failing browser assertions for: one photo keeps the legacy request/parse path; two or three photos send only `qwen/qwen3-vl-32b-instruct`, `temperature:0`, numbered images, and strict evidence prompt; supported output fills the form; uncertain output opens a blank manual form; clear different-product output blocks; malformed response never falls back to text extraction or stale values; ambiguous date leaves only expiry blank; retry preserves selected thumbnails.
-- [ ] Run `node scripts/test-multiphoto.cjs` and verify the new assertions fail.
+- [ ] Start `python3 -m http.server 8031` in Terminal A. In Terminal B run `PLAYWRIGHT_MODULE=/Users/getupyang/.agents/skills/gstack/node_modules/playwright node scripts/test-multiphoto.cjs` and verify the new assertions fail for the intended missing behavior, not for server/module setup. Stop Terminal A.
 - [ ] Load `multi-photo-evidence.js` before the inline application script. Split `recognizePhoto` into explicit single and multi request builders. Remove only dead `qwen/qwen-vl-plus`; lock the single-photo request snapshot to `[google/gemini-2.5-flash, qwen/qwen3-vl-32b-instruct]`, preserving its prompt and fallback order.
 - [ ] For multi-photo only, build the strict schema prompt, set the one Qwen model, add `X-Recognition-Strategy: multi_evidence_v1`, parse JSON without regex/text fallback, call the pure resolver, and map stable outcomes to existing confirmation/conflict/manual UX. Never display an old parsed result after invalid, timeout, or 429 responses.
 - [ ] Remove the unsafe three-part date tail interpretation so `8/01/08` is blank; keep unambiguous full date and labelled month/year behavior.
@@ -100,11 +100,12 @@ Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multi
 - Read: `/private/tmp/pantry-multiphoto-split.json`
 - Output: `/private/tmp/pantry-multiphoto-regression/`
 
-- [ ] Verify the manifest and split hashes still equal the values frozen in Task 0. Abort on any change.
-- [ ] Run the development subset only through the CLI from Task 1. For each multi case run every image alone plus the joint set twice at `temperature=0`; run single-photo compatibility once. Do not inspect holdout results while changing prompt/code.
+- [ ] Verify the manifest and split hashes still equal the values frozen in Task 1 using the Task 0 verifier. Abort on any change.
+- [ ] Start the new local Serverless implementation in Terminal A with `vercel env run -- vercel dev --listen 8032`. Confirm `http://127.0.0.1:8032/pantry.html` and `/api/openrouter` are served by the worktree code, not proxied to production. Do not use `scripts/dev-server.cjs` for this replay because it intentionally proxies API traffic to production.
+- [ ] Run the development subset through the Task 0 CLI with `--base-url http://127.0.0.1:8032`. For each multi case run every image alone plus the joint set twice at `temperature=0`; run single-photo compatibility once. Do not inspect holdout results while changing prompt/code. Stop and restart `vercel dev` after any server code change.
 - [ ] Freeze the candidate, open holdout once, and generate JSON + Markdown reports with per-case/per-field scores, repeat stability, actual route, and cost. If holdout fails, stop release and add new unseen real samples before another final evaluation.
 - [ ] Hard gate: every multi case coverage ≥ its best single, wrong rate ≤ its best single, complementary cases gain ≥1 correct field, zero catastrophic wrong fields in every repeat, identical keep/blank decisions, correct Qwen model/provider, total development spend ≤ `$0.05` unless explicitly documented.
-- [ ] Never commit the private manifest, split, images, OCR, raw responses, accepted user data, or local reports.
+- [ ] Stop Terminal A after replay. Never commit the private manifest, split, images, OCR, raw responses, accepted user data, or local reports.
 
 ### Task 6: Layered verification and release record
 
@@ -114,9 +115,9 @@ Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multi
 - [ ] Run smoke: `node --test scripts/test-multiphoto-evidence.cjs scripts/test-replay-multiphoto-cases.mjs scripts/test-ios-expiry.cjs scripts/test-intake.cjs`.
 - [ ] Run API touched suite: `node --experimental-default-type=module --test scripts/test-multiphoto-api.mjs`.
 - [ ] For browser touched suites, start `python3 -m http.server 8031` in Terminal A; in Terminal B run both Playwright commands from Task 3 with the explicit `PLAYWRIGHT_MODULE`; then stop the server. Do not claim browser verification from a bare `node --test` command.
-- [ ] Run the gated private replay from Task 4. Do not deploy if any hard gate fails.
-- [ ] Write the dated release note with branch, final commit, files, user-visible behavior, commands/results, case counts, aggregate and per-case gate status, actual spend, scope, and what may become stale. Include no private sample content.
-- [ ] Commit the release note and relevant implementation files only. Confirm `git status --short` has no unrelated changes.
+- [ ] Run the gated private replay from Task 5. Do not deploy if any hard gate fails.
+- [ ] Create a dated release-note draft with branch, implementation commit, files, user-visible behavior, local commands/results, case counts, aggregate and per-case gate status, actual development spend, scope, and what may become stale. Mark production deployment, rollback target, production smoke, and final commit as pending. Include no private sample content.
+- [ ] Commit the implementation and release-note draft only. Confirm `git status --short` has no unrelated changes. This is the preview candidate, not the final documentation commit.
 
 ### Task 7: Preview, production smoke, rollback, and private-data cleanup
 
@@ -126,5 +127,6 @@ Work only in `/private/tmp/pantry-multiphoto-design` on `codex/single-item-multi
 - [ ] Deploy production only after preview and regression gates pass. Verify the deployment commit/hash and health endpoint/static page.
 - [ ] Run one minimal authorized production multi-photo smoke and recheck review/usage rows, actual route, and cost. Avoid a broad paid full regression in production.
 - [ ] If model route, privacy logging, UX outcome, or cost gate fails, run `vercel rollback <captured-prior-deployment-id-or-url> --yes`, then `vercel rollback status` and `vercel inspect pantry-mng.vercel.app --format=json`. Recheck page hash, basic health, one no-consent aggregate row, and absence of private payloads; document both deployment IDs and result.
-- [ ] Push the feature branch and record the exact commit hash. Do not merge or push to `main` unless explicitly authorized.
+- [ ] Update the release note after production smoke or rollback with the captured old/new deployment IDs, actual production route/cost, smoke result, rollback result if any, and verification time. Commit this final documentation update, then insert that final documentation commit hash using a follow-up dated note if needed (do not amend published history).
+- [ ] Push the feature branch and record the exact final commit hash. Do not merge or push to `main` unless explicitly authorized.
 - [ ] After retaining only the sanitized aggregate release metrics, delete the exact private artifacts created for this run: `/private/tmp/pantry-multiphoto-manifest.json`, `/private/tmp/pantry-multiphoto-split.json`, `/private/tmp/pantry-multiphoto-regression/`, and any explicitly recorded downloaded-image/response directories. Confirm each path is absent and `git status --short` contains no private or unrelated files.
