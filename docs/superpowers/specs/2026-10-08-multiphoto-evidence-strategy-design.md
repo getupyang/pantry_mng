@@ -103,6 +103,8 @@
 
 响应必须为每个输入图片序号 `1..N` 恰好提供一条图片观察，不得缺号、重复或越界。字段证据必须能逐字对应到所引用图片的 `observedText` 条目（仅做 NFKC、大小写、空白和全半角归一化），且图片必须是 `targetMatch=same`。`clear` 可以支持完整字段；`partial` 只能支持逐字可见的信息，不能据残缺喷码推导日期；`unreadable` 和 `different` 不能支持任何字段。模型不得以包装颜色、产品常识或背景商品补全字段。
 
+严格 required schema 为：顶层必须同时具有 `sameProduct`、`conflictReason`、`images`、`fields`；每个 `images[]` 必须同时具有 `index`、`targetMatch`、`role`、`quality`、`observedText`，且 `observedText` 为字符串数组；`fields` 必须恰好覆盖 `name`、`brand`、`packageSize`、`unit`、`expiryDate`，每个字段必须同时具有 `value`、`evidence`、`imageIndexes`、`status`。缺少任一 required key、类型错误、额外未知评分字段或未知枚举均使整次响应成为 `multi_strategy_invalid_response`。`missing/conflict` 状态仍必须显式返回这些 key，但 `value` 可为 null、`evidence` 可为空、`imageIndexes` 可为空数组。结构完整但 evidence 内容不合格时才是单字段留空。
+
 模型只返回包装原文的 `name`、`brand` 及其证据，不返回可直接信任的中文派生字段。中文展示由裁决后的确定性本地化层完成：对规范化后的原文做完全匹配，先查冻结品牌表（例如 `CLARINS → 娇韵诗`），再查冻结商品短语表（例如 `Soothing Toning Lotion → 舒缓爽肤水`）。每条映射记录来源、核对日期和测试；没有完全匹配时保留原文。运行时不做模糊语义匹配，不接受模型自报的 `source`，也不凭模型知识生成音译、系列简称或消费者昵称。
 
 ## 确定性裁决规则
@@ -118,13 +120,16 @@
 - 中文名称优先级固定为：冻结的官方/品牌译名 → 字面商品类别翻译 → 原文。音译、系列简称、消费者昵称只有进入 case manifest 的 `allowedAliases` 才能用于评测，运行时不得自由扩写。
 - 任一 evidence 无法回指 `observedText`、引用了无资格图片或状态和值不一致，只清空相关字段；响应整体结构不合法则整次识别失败，不回退到旧的直接填表逻辑。
 
-主体判断按以下固定优先级执行：
+主体判断在结构校验后按下列互斥、穷尽的决策表执行。顶层 `sameProduct` 只作为模型观察写入日志，不参与最终结果；它与逐图结论不一致时记录 `top_level_disagreement`，不会制造第二套裁决：
 
-1. 先校验逐图 `targetMatch` 和字段证据。
-2. 任一 `clear + different`，或 clear/same 目标间存在不相容品牌/明确不同品名，结果为 `blocked_product_conflict`，无论顶层值是什么。
-3. 没有冲突、至少一张 `clear + same` 且其余只有 `same/uncertain` 时，可继续字段裁决。
-4. 全部为 `uncertain` 时安全留空并进入手填。
-5. 顶层 `sameProduct=different` 但逐图全部为 `same`，或顶层 `same` 但逐图出现 `different`，视为响应内部矛盾，整次返回 `multi_strategy_invalid_response`；顶层 `uncertain` 不覆盖逐图确定证据。
+| 条件（从上到下首个命中） | 唯一结果 |
+| --- | --- |
+| 任一图片为 `quality=clear + targetMatch=different` | `blocked_product_conflict` |
+| 两张及以上 `clear + same` 图片间存在不相容品牌或明确不同品名 | `blocked_product_conflict` |
+| 至少一张图片为 `clear + same`，且未命中以上冲突 | 只使用 `same` 且合格的 clear/partial 证据继续字段裁决；所有 `different/uncertain/unreadable` 图片忽略 |
+| 不存在 `clear + same`（无论其余合法组合是 partial/unreadable、same/different/uncertain） | 所有字段留空，结果为 `manual_blank_uncertain` |
+
+因此 `partial/unreadable + different` 永远不会单独阻断商品；它们在已有 clear/same 目标时被忽略，没有 clear/same 目标时进入空表手填。所有合法枚举组合都唯一落入上表之一。
 
 ## 日期规则
 
@@ -144,7 +149,7 @@
 
 ### Fail-closed 明细
 
-以下任一结构问题返回 `multi_strategy_invalid_response`，`parsedResult=null`，不显示旧识别值，也不自动保存：JSON 损坏、顶层字段缺失、字段类型错误、未知枚举、图片序号缺失/重复/越界、未覆盖全部输入图片、响应被截断、上述主体判断内部矛盾。超时和 429 分别返回可区分的错误码，同样不降级。用户只能明确选择“重试”或进入全部字段为空的手填表单。
+以下任一结构问题返回 `multi_strategy_invalid_response`，`parsedResult=null`，不显示旧识别值，也不自动保存：JSON 损坏、required key 缺失、字段类型错误、未知枚举、图片序号缺失/重复/越界、未覆盖全部输入图片、响应被截断。超时和 429 分别返回可区分的错误码，同样不降级。用户只能明确选择“重试”或进入全部字段为空的手填表单。
 
 日期字段结构合法但内容歧义、无法解析或 evidence/value 不一致时，不判整次结构失败，只清空 `expiryDate` 并记录 `blanked_invalid_evidence`。
 
