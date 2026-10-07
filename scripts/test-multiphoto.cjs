@@ -23,6 +23,7 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     const recognitionBodies = [];
     const usageEvents = [];
     const reviewUpdates = [];
+    const adminTokens = [];
     let recognitionMode = 'success';
     let recognitionDelayMs = 0;
     const recognitionQueue = [];
@@ -51,6 +52,49 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     });
     await page.route('**/api/**', route => {
       const url = new URL(route.request().url());
+      if (url.pathname === '/api/admin/usage') {
+        adminTokens.push(route.request().headers()['x-admin-token']);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            generatedAt: '2026-10-07T00:00:00.000Z',
+            days: 30,
+            summary: {},
+            daily: [],
+            eventCounts: [],
+            recognitionCounts: [],
+            channelCounts: [],
+            countryCounts: [],
+            families: [],
+            recentEvents: []
+          })
+        });
+      }
+      if (url.pathname === '/api/admin/recognition-reviews') {
+        adminTokens.push(route.request().headers()['x-admin-token']);
+        const firstImage = `data:image/png;base64,${png.toString('base64')}`;
+        const secondImage = `data:image/png;base64,${png.toString('base64')}`;
+        const baseReview = {
+          outcome: 'recognized',
+          reqType: 'photo',
+          createdAt: '2026-10-07T00:00:00.000Z',
+          models: [],
+          parsedResult: {},
+          acceptedData: null,
+          modelText: '',
+          familyId: 'test-family'
+        };
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ reviews: [
+            { ...baseReview, imageDataUrls: [firstImage, secondImage], imageDataUrl: firstImage },
+            { ...baseReview, imageDataUrl: firstImage },
+            { ...baseReview }
+          ] })
+        });
+      }
       if (url.pathname === '/api/openrouter') {
         recognitionCalls += 1;
         recognitionBodies.push(JSON.parse(route.request().postData() || '{}'));
@@ -779,6 +823,30 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'network'), true);
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'timeout'), true, JSON.stringify(errorEvents.map(event => event.properties.failureCategory)));
     assert.equal(errorEvents.some(event => event.properties.failureCategory === 'parse'), true);
+
+    await page.goto('http://127.0.0.1:8031/admin.html');
+    await page.locator('#token').fill('test-admin-token');
+    await page.locator('#loginBtn').click();
+    await page.waitForFunction(() => document.querySelectorAll('.review-card').length === 3);
+    const reviewCards = page.locator('.review-card');
+    assert.equal(await reviewCards.nth(0).locator('.review-images').count(), 1, 'multi-photo review renders one image group');
+    assert.equal(await reviewCards.nth(0).locator('.review-images img').count(), 2, 'multi-photo review renders every image once');
+    assert.deepEqual(
+      await reviewCards.nth(0).locator('.review-images img').evaluateAll(images => images.map(image => image.alt)),
+      ['识别样本照片 1', '识别样本照片 2'],
+      'grouped review images have indexed accessible labels'
+    );
+    assert.equal(await reviewCards.nth(1).locator('.review-images img').count(), 1, 'legacy review renders its single image');
+    assert.equal(await reviewCards.nth(2).locator('.review-empty-img').count(), 1, 'review without images keeps the empty state');
+    assert.deepEqual(adminTokens, ['test-admin-token', 'test-admin-token'], 'admin login token is used for usage and review loading');
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+        true,
+        `admin review gallery has no horizontal overflow at ${width}px`
+      );
+    }
     assert.deepEqual(errors, [], 'no browser runtime errors');
     console.log('PASS: collection, explicit recognition, retry/conflict handling, review lifecycle, analytics, cleanup');
   } finally {
