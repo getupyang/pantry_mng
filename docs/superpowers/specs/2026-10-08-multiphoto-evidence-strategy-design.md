@@ -60,26 +60,16 @@
     }
   ],
   "fields": {
-    "nameOriginal": {
+    "name": {
       "value": "Soothing Toning Lotion",
       "evidence": "Soothing Toning Lotion",
       "imageIndexes": [1],
       "status": "supported"
     },
-    "nameZh": {
-      "value": "舒缓爽肤水",
-      "source": "literal_category_translation",
-      "status": "supported"
-    },
-    "brandOriginal": {
+    "brand": {
       "value": "CLARINS",
       "evidence": "CLARINS",
       "imageIndexes": [1],
-      "status": "supported"
-    },
-    "brandZh": {
-      "value": "娇韵诗",
-      "source": "frozen_brand_mapping",
       "status": "supported"
     },
     "packageSize": {
@@ -113,7 +103,7 @@
 
 响应必须为每个输入图片序号 `1..N` 恰好提供一条图片观察，不得缺号、重复或越界。字段证据必须能逐字对应到所引用图片的 `observedText` 条目（仅做 NFKC、大小写、空白和全半角归一化），且图片必须是 `targetMatch=same`。`clear` 可以支持完整字段；`partial` 只能支持逐字可见的信息，不能据残缺喷码推导日期；`unreadable` 和 `different` 不能支持任何字段。模型不得以包装颜色、产品常识或背景商品补全字段。
 
-名称响应拆为 `nameOriginal`、`nameZh`，品牌拆为 `brandOriginal`、`brandZh`，两组都保留独立 evidence。中文值只有在属于官方/品牌固定译名、字面商品类别翻译或预先冻结的别名时才可采用；不能安全翻译时展示原文。运行时不做模糊语义匹配，也不凭模型知识生成系列昵称。
+模型只返回包装原文的 `name`、`brand` 及其证据，不返回可直接信任的中文派生字段。中文展示由裁决后的确定性本地化层完成：对规范化后的原文做完全匹配，先查冻结品牌表（例如 `CLARINS → 娇韵诗`），再查冻结商品短语表（例如 `Soothing Toning Lotion → 舒缓爽肤水`）。每条映射记录来源、核对日期和测试；没有完全匹配时保留原文。运行时不做模糊语义匹配，不接受模型自报的 `source`，也不凭模型知识生成音译、系列简称或消费者昵称。
 
 ## 确定性裁决规则
 
@@ -127,6 +117,14 @@
 - `qty` 在单件流程固定为 1，不根据背景盒子数量推断家庭库存。
 - 中文名称优先级固定为：冻结的官方/品牌译名 → 字面商品类别翻译 → 原文。音译、系列简称、消费者昵称只有进入 case manifest 的 `allowedAliases` 才能用于评测，运行时不得自由扩写。
 - 任一 evidence 无法回指 `observedText`、引用了无资格图片或状态和值不一致，只清空相关字段；响应整体结构不合法则整次识别失败，不回退到旧的直接填表逻辑。
+
+主体判断按以下固定优先级执行：
+
+1. 先校验逐图 `targetMatch` 和字段证据。
+2. 任一 `clear + different`，或 clear/same 目标间存在不相容品牌/明确不同品名，结果为 `blocked_product_conflict`，无论顶层值是什么。
+3. 没有冲突、至少一张 `clear + same` 且其余只有 `same/uncertain` 时，可继续字段裁决。
+4. 全部为 `uncertain` 时安全留空并进入手填。
+5. 顶层 `sameProduct=different` 但逐图全部为 `same`，或顶层 `same` 但逐图出现 `different`，视为响应内部矛盾，整次返回 `multi_strategy_invalid_response`；顶层 `uncertain` 不覆盖逐图确定证据。
 
 ## 日期规则
 
@@ -146,7 +144,9 @@
 
 ### Fail-closed 明细
 
-以下任一情况返回 `multi_strategy_invalid_response`，`parsedResult=null`，不显示旧识别值，也不自动保存：JSON 损坏、顶层字段缺失、字段类型错误、未知枚举、图片序号缺失/重复/越界、未覆盖全部输入图片、响应被截断、日期无法按规则解析。超时和 429 分别返回可区分的错误码，同样不降级。用户只能明确选择“重试”或进入全部字段为空的手填表单。
+以下任一结构问题返回 `multi_strategy_invalid_response`，`parsedResult=null`，不显示旧识别值，也不自动保存：JSON 损坏、顶层字段缺失、字段类型错误、未知枚举、图片序号缺失/重复/越界、未覆盖全部输入图片、响应被截断、上述主体判断内部矛盾。超时和 429 分别返回可区分的错误码，同样不降级。用户只能明确选择“重试”或进入全部字段为空的手填表单。
+
+日期字段结构合法但内容歧义、无法解析或 evidence/value 不一致时，不判整次结构失败，只清空 `expiryDate` 并记录 `blanked_invalid_evidence`。
 
 单个字段证据不合法但整体结构完整时，只将该字段标记为 `blanked_invalid_evidence`。主体冲突返回 `blocked_product_conflict`。所有这些结果都进入回归报告；仅在用户已有 review 授权且上游确有响应时保存完整响应，否则只记聚合事件。
 
@@ -172,10 +172,10 @@
 
 ## 回归方法与上线门槛
 
-全部 16 条历史记录都要重放。标签 manifest 在修改 prompt 或代码前冻结并记录哈希。对有标签 case 依据稳定哈希分配 25% holdout；候选策略冻结前只看开发集，holdout 只在最终候选上打开一次。对每个多图 case，额外运行每张单图与全部图片联合识别：
+全部 16 条历史记录都要重放。标签 manifest 在修改 prompt 或代码前冻结并记录哈希。对有标签 case 做 25% 分层 holdout：单图、多图分别按稳定哈希排序，holdout 至少包含 1 条经过审计的多图 case；候选策略冻结前只看开发集，holdout 只在最终候选上打开一次。若 holdout 失败，必须增加并冻结新的未见真实样本后才能继续调参和重新建立最终门槛，不能反复使用已打开的 holdout 证明上线。对每个多图 case，额外运行每张单图与全部图片联合识别：
 
 1. “最佳单图”按 correct 数最多、wrong 数最少、coverage 最高、图片序号最小依次确定。
-2. 联合识别的 wrong rate 不得高于最佳单图，coverage 不得低于最佳单图。
+2. 每一个多图 case 的 wrong rate 都不得高于其最佳单图，coverage 都不得低于其最佳单图；aggregate 只作为附加报告，不能抵消单 case 退化。
 3. 互补字段必须在运行前由 reviewer 标注：若两张及以上图片分别含有不同的 `visible-supported` 字段，联合识别至少比最佳单图多一个 correct。
 4. 错误商品、错误品牌、错误容量、错误日期属于灾难性错误，任意一条即阻止上线。
 5. 无法确认的字段留空算安全通过；错误填充算失败。
@@ -183,6 +183,8 @@
 7. 单图现有测试、包装类型、iOS 日期输入、保存和重载不得回归。
 
 所有多图 case 在 `temperature=0`、固定模型 ID 和固定 provider 路由下运行两次。两次都必须零灾难性错误，且字段的保留/留空决定完全一致；实际模型或 provider 不一致直接阻止上线。新建的脱敏 success、ambiguous、conflict fixtures 作为历史集之外的 smoke，避免只对 16 条老 case 调参。
+
+证据 gate 只能验证模型响应内部可追溯和一致，不能从像素层独立证明 `observedText` 没有幻觉。本期不引入第二 OCR/第二模型；“弱图不污染结果”是由保守留空规则、逐 case 真实回归和零灾难性错误门槛共同提供的经验性保障，不宣称为像素级形式验证。若真实 holdout 仍出现自洽幻觉，应停止上线并升级为独立 OCR/第二观察来源，而不是继续放宽纯函数。
 
 上线最低标签条件为：至少 6 条经过字段审计的真实记录，其中至少 2 条多图、1 条冲突/歧义样本。若现有数据不满足，不把未审计 `acceptedData` 伪装成金标，而是停止上线并补审。
 
@@ -236,7 +238,7 @@ OpenRouter 2026-10-08 页面标价：
 1. 在独立 feature worktree 中按 TDD 实现。
 2. 先跑脱敏单元测试与现有 touched suites。
 3. 对全部历史 case 运行真实模型重放并生成本地报告。
-4. 生成逐 case、逐字段报告；任一灾难性错误、aggregate multi coverage 低于最佳单图、wrong rate 高于最佳单图、重复运行不稳定或模型/provider 不符，立即停止发布。
+4. 生成逐 case、逐字段报告；任一 case 退化、任一灾难性错误、aggregate multi coverage 低于最佳单图、wrong rate 高于最佳单图、重复运行不稳定或模型/provider 不符，立即停止发布。aggregate 是额外健康指标，不替代逐 case 门槛。
 5. 只有达到门槛才部署预览，并运行成功、模糊留空、不同商品冲突三类 smoke。
 6. 发布生产后用授权 smoke 确认实际模型为 Qwen3-VL、provider 与固定路由一致、`strategyVersion` 可查、日志符合 consent 分支、单次成本不超过 `$0.001`、页面构建哈希正确。
 7. 任一生产 smoke、模型路由、日志隐私或成本检查失败，立即恢复上一生产 deployment，并记录失败时间、deployment ID 和回滚结果。
