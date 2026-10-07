@@ -44,11 +44,11 @@
 
 ## 模型请求与响应
 
-请求按原顺序发送图片，并明确编号。模型输出严格 JSON：
+请求按原顺序发送图片，并明确编号。模型输出严格 JSON。`sameProduct` 只是模型观察，最终主体判断由裁决器完成：
 
 ```json
 {
-  "sameProduct": true,
+  "sameProduct": "same",
   "conflictReason": "",
   "images": [
     {
@@ -60,16 +60,26 @@
     }
   ],
   "fields": {
-    "name": {
-      "value": "娇韵诗舒缓爽肤水",
+    "nameOriginal": {
+      "value": "Soothing Toning Lotion",
       "evidence": "Soothing Toning Lotion",
       "imageIndexes": [1],
       "status": "supported"
     },
-    "brand": {
-      "value": "娇韵诗",
+    "nameZh": {
+      "value": "舒缓爽肤水",
+      "source": "literal_category_translation",
+      "status": "supported"
+    },
+    "brandOriginal": {
+      "value": "CLARINS",
       "evidence": "CLARINS",
       "imageIndexes": [1],
+      "status": "supported"
+    },
+    "brandZh": {
+      "value": "娇韵诗",
+      "source": "frozen_brand_mapping",
       "status": "supported"
     },
     "packageSize": {
@@ -94,19 +104,29 @@
 }
 ```
 
-`status` 只允许 `supported`、`missing`、`conflict`。模型不得以包装颜色、产品常识或背景商品补全字段。
+枚举和值域固定如下，出现未知值即视为结构错误：
+
+- `sameProduct` / `targetMatch`：`same`、`different`、`uncertain`
+- `role`：`front`、`back`、`side`、`bottom`、`expiry`、`other`
+- `quality`：`clear`、`partial`、`unreadable`
+- 字段 `status`：`supported`、`missing`、`conflict`
+
+响应必须为每个输入图片序号 `1..N` 恰好提供一条图片观察，不得缺号、重复或越界。字段证据必须能逐字对应到所引用图片的 `observedText` 条目（仅做 NFKC、大小写、空白和全半角归一化），且图片必须是 `targetMatch=same`。`clear` 可以支持完整字段；`partial` 只能支持逐字可见的信息，不能据残缺喷码推导日期；`unreadable` 和 `different` 不能支持任何字段。模型不得以包装颜色、产品常识或背景商品补全字段。
+
+名称响应拆为 `nameOriginal`、`nameZh`，品牌拆为 `brandOriginal`、`brandZh`，两组都保留独立 evidence。中文值只有在属于官方/品牌固定译名、字面商品类别翻译或预先冻结的别名时才可采用；不能安全翻译时展示原文。运行时不做模糊语义匹配，也不凭模型知识生成系列昵称。
 
 ## 确定性裁决规则
 
 新增纯函数 `resolveMultiPhotoEvidence`，输入模型 JSON，输出现有表单结构。
 
-- 任一图片明确属于不同主体，或字段出现不可消解冲突：`sameProduct=false`，阻断确认表单。
+- 主体级冲突与字段级冲突分开处理。清晰图片明确为不同目标商品，或目标图片间出现不相容的非空品牌/明确不同品名，属于主体级冲突，阻断整条自动填表。
+- 已确认同一商品后，容量、单位或日期证据互相冲突，只清空对应字段，不阻断其他字段。
 - 字段只有 `status=supported`、非空 evidence、有效图片序号时才保留。
 - `missing` 和 `conflict` 字段一律清空，并加入 `missingFields`。
 - 品牌、品名只能来自前景目标商品；背景商品文字不得成为 evidence。
 - `qty` 在单件流程固定为 1，不根据背景盒子数量推断家庭库存。
-- 中文名称允许对包装英文/日文做忠实翻译，格式为“中文品牌 + 可验证的商品类型/名称”；不得凭产品知识生成包装上没有依据的系列昵称。
-- 模型响应缺少证据结构、字段状态或图片索引时 fail closed，不回退到旧的直接填表逻辑。
+- 中文名称优先级固定为：冻结的官方/品牌译名 → 字面商品类别翻译 → 原文。音译、系列简称、消费者昵称只有进入 case manifest 的 `allowedAliases` 才能用于评测，运行时不得自由扩写。
+- 任一 evidence 无法回指 `observedText`、引用了无资格图片或状态和值不一致，只清空相关字段；响应整体结构不合法则整次识别失败，不回退到旧的直接填表逻辑。
 
 ## 日期规则
 
@@ -124,31 +144,51 @@
 - 删除不可用的 `qwen/qwen-vl-plus`。
 - Qwen3-VL 请求失败时提示重试或手填；不静默降级到已在真实多图样本中产生错误的 Gemini。
 
+### Fail-closed 明细
+
+以下任一情况返回 `multi_strategy_invalid_response`，`parsedResult=null`，不显示旧识别值，也不自动保存：JSON 损坏、顶层字段缺失、字段类型错误、未知枚举、图片序号缺失/重复/越界、未覆盖全部输入图片、响应被截断、日期无法按规则解析。超时和 429 分别返回可区分的错误码，同样不降级。用户只能明确选择“重试”或进入全部字段为空的手填表单。
+
+单个字段证据不合法但整体结构完整时，只将该字段标记为 `blanked_invalid_evidence`。主体冲突返回 `blocked_product_conflict`。所有这些结果都进入回归报告；仅在用户已有 review 授权且上游确有响应时保存完整响应，否则只记聚合事件。
+
 ## Case 库与标签边界
 
-当前 review 表共有 16 条历史记录：9 条有 `acceptedData`，7 条没有最终确认。历史图片不提交 GitHub。
+当前 review 表共有 16 条历史记录：11 条单图、5 条多图；其中 9 条有 `acceptedData`（6 条单图、3 条多图），7 条没有最终确认。历史图片不提交 GitHub。
 
-- 强标签：review 与 `acceptedData` 直接关联。
-- 人工标签：用户明确指出失败并给出正确结果，但必须确认图片和结果属于同一商品。
-- 无标签：只用于人工观察、解析健壮性和“不得崩溃”检查，不计算准确率。
-- 英文正式名与中文译名允许语义等价；不同商品、品牌、容量和日期必须精确。
-- 用户库存数量、图外日期、包装类型等不作为视觉识别错误。
+- `acceptedData` 不是自动视觉金标。冻结 manifest 前，逐 case、逐字段标注为 `visible-supported`、`user-provided/non-visual`、`preference-only` 或 `unknown`，并记录 `expected`、`allowedAliases`、`evidenceImageIndexes`、`reviewer` 和 `reason`。
+- 只有 `visible-supported` 字段进入准确率计算。用户库存数量、图外日期、包装类型、分类和单纯命名偏好不作为视觉识别错误。
+- 本轮评分字段固定为 `name`、`brand`、`packageSize`、`unit`、`expiryDate`；不评分 `qty`、`category`、`packageType`。
+- 无最终确认的 7 条仍用于结构健壮性、留空和冲突人工观察，但除非完成人工逐字段标注，否则不计准确率。
+- 所有可接受中文/外文名称在运行前写入冻结的 `allowedAliases`；评测期间不得临时增加别名来让结果通过。
+
+### 评分归一化与定义
+
+- 文本：NFKC、转小写、去首尾空白、合并连续空白、统一常见中英文标点。
+- 单位：只按冻结映射规范为 `ml`、`g` 等；数值必须精确相等。
+- 日期：必须规范为同一个 `YYYY-MM-DD`，年月标签按产品既有规则取当月第一天；不允许宽松日期近似。
+- 名称/品牌：规范化后必须等于 `expected` 或某个冻结的 `allowedAliases`，不调用模型做语义裁判。
+- `correct`：非空且精确匹配；`wrong`：非空但不匹配；`abstain`：空值。
+- coverage = `correct / visible-supported 字段数`；wrong rate = `wrong / visible-supported 字段数`。
+- 灾难性错误定义为 name、brand、packageSize、expiryDate 任一字段非空且错误；每个 case、每次运行允许数为 0。
 
 ## 回归方法与上线门槛
 
-全部 16 条历史记录都要重放。对每个多图 case，额外运行每张单图与全部图片联合识别：
+全部 16 条历史记录都要重放。标签 manifest 在修改 prompt 或代码前冻结并记录哈希。对有标签 case 依据稳定哈希分配 25% holdout；候选策略冻结前只看开发集，holdout 只在最终候选上打开一次。对每个多图 case，额外运行每张单图与全部图片联合识别：
 
-1. 联合识别错误字段数不得高于最佳单图。
-2. 联合识别正确字段覆盖率不得低于最佳单图。
-3. 有互补证据时，联合识别至少多得到一个正确字段。
+1. “最佳单图”按 correct 数最多、wrong 数最少、coverage 最高、图片序号最小依次确定。
+2. 联合识别的 wrong rate 不得高于最佳单图，coverage 不得低于最佳单图。
+3. 互补字段必须在运行前由 reviewer 标注：若两张及以上图片分别含有不同的 `visible-supported` 字段，联合识别至少比最佳单图多一个 correct。
 4. 错误商品、错误品牌、错误容量、错误日期属于灾难性错误，任意一条即阻止上线。
 5. 无法确认的字段留空算安全通过；错误填充算失败。
 6. 不同商品混拍必须阻断。
 7. 单图现有测试、包装类型、iOS 日期输入、保存和重载不得回归。
 
+所有多图 case 在 `temperature=0`、固定模型 ID 和固定 provider 路由下运行两次。两次都必须零灾难性错误，且字段的保留/留空决定完全一致；实际模型或 provider 不一致直接阻止上线。新建的脱敏 success、ambiguous、conflict fixtures 作为历史集之外的 smoke，避免只对 16 条老 case 调参。
+
+上线最低标签条件为：至少 6 条经过字段审计的真实记录，其中至少 2 条多图、1 条冲突/歧义样本。若现有数据不满足，不把未审计 `acceptedData` 伪装成金标，而是停止上线并补审。
+
 真实样本不能进入公开仓库；自动化单元测试使用脱敏结构化 fixture，真实图片重放由本地脚本从授权 review 数据读取。
 
-## 日志
+## 日志与隐私
 
 不新增数据库 schema。沿用 `model_response`、`parsed_result` 和 `accepted_data`，补充：
 
@@ -160,6 +200,11 @@
 - 用户最终修改字段
 
 这样后续可以分别衡量事实错误、合理留空、中文命名体验和用户补充信息。
+
+- 用户同意 review 时，才沿用现有机制保存图片、完整模型响应、observedText、evidence 和裁决结果，供失败复盘。
+- 未同意 review 时，不保存图片、文件名、OCR/observedText 或字段 evidence；只在用量记录中保存 strategy、model、imageCount、status、errorCode 和 cost 等聚合信息。
+- base64、原始文件名、OCR/observedText 和 evidence 不写入普通服务 console 或第三方 analytics。
+- 本地真实回归报告只放 `/private/tmp/pantry-*` 或 gitignored `.local/`；可提交文档仅保留 review ID、聚合指标和脱敏结论。发布结束清理临时图片/响应，真实数据不得进 GitHub。
 
 ## API 成本
 
@@ -180,7 +225,9 @@ OpenRouter 2026-10-08 页面标价：
 
 新 JSON 证据结构会增加少量输出 token。生产预算按 `$0.0008/次` 上限估算，即约 `$0.80/1000 次多图识别`。正常实测更接近 `$0.40–0.60/1000 次`。
 
-历史全量回归只在开发期执行单图拆分：预计 25–35 次调用，总成本低于 `$0.02`。生产用户流程仍是一组照片一次调用，不执行 N+1 重放。
+当前 5 条多图的图片数为 3、2、3、2、2，共 12 张。每轮回归为 5 次联合调用 + 12 次拆分单图调用，共 17 次；稳定性重复两轮为 34 次。再加 11 条单图兼容回放一次，基础共 45 次，预留 25% 重试/限流余量后约 57 次。按 `$0.0008/次` 上限，开发期真实模型回归预算不超过约 `$0.046`，按 `$0.05` 封顶；若加入新 holdout 或超出重试余量，必须单独在报告中列出。
+
+生产用户流程仍是一组照片一次调用，不执行 N+1 重放，目标成本上限 `$0.0008/次`；生产 smoke 的硬阻断线为 `$0.001/次`。价格、图像 token 算法和 provider 可用性会变化，部署前必须重新核价并记录真实 generation cost。
 
 价格和 provider 可用性会变化；发布记录必须写明实际调用成本和核对日期。
 
@@ -189,9 +236,10 @@ OpenRouter 2026-10-08 页面标价：
 1. 在独立 feature worktree 中按 TDD 实现。
 2. 先跑脱敏单元测试与现有 touched suites。
 3. 对全部历史 case 运行真实模型重放并生成本地报告。
-4. 只有达到上述门槛才部署预览。
-5. 预览运行成功、模糊留空、不同商品冲突三类 smoke。
-6. 发布生产并复核运行模型、成本、review 日志和正式页面哈希。
+4. 生成逐 case、逐字段报告；任一灾难性错误、aggregate multi coverage 低于最佳单图、wrong rate 高于最佳单图、重复运行不稳定或模型/provider 不符，立即停止发布。
+5. 只有达到门槛才部署预览，并运行成功、模糊留空、不同商品冲突三类 smoke。
+6. 发布生产后用授权 smoke 确认实际模型为 Qwen3-VL、provider 与固定路由一致、`strategyVersion` 可查、日志符合 consent 分支、单次成本不超过 `$0.001`、页面构建哈希正确。
+7. 任一生产 smoke、模型路由、日志隐私或成本检查失败，立即恢复上一生产 deployment，并记录失败时间、deployment ID 和回滚结果。
 
 ## 适用范围与过时风险
 
