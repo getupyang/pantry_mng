@@ -1094,7 +1094,8 @@ function updateSVGLevel(item,interactive=false){
 // ═══════════════════════════════════════════════
 const DETECT_MAP=[
   {kw:['面膜','贴膜'],cat:'面膜',shape:'generic',unit:'片',daily:0.2,color:['#eadde8','#a86f98','#68405e']},
-  {kw:['面霜','乳霜','眼霜','精华霜','保湿霜'],cat:'面霜',shape:'jar',unit:'g',daily:0.8,color:['#d0dce8','#4e6880','#1e3850']},
+  {kw:['眼霜','眼部精华'],cat:'眼霜',shape:'jar',unit:'g',daily:0.2,color:['#d8d6e8','#6d668d','#3d3858']},
+  {kw:['面霜','乳霜','精华霜','保湿霜'],cat:'面霜',shape:'jar',unit:'g',daily:0.8,color:['#d0dce8','#4e6880','#1e3850']},
   {kw:['防晒','防晒霜','防晒乳'],cat:'防晒',shape:'facewashTube',unit:'ml',daily:1,color:['#f6e9b8','#c7972e','#75550d']},
   {kw:['爽肤水','化妆水','柔肤水','精粹水','精华水','神仙水'],cat:'水',shape:'generic',unit:'ml',daily:2,color:['#c4dce8','#4f809a','#245064']},
   {kw:['乳液','保湿乳'],cat:'乳液',shape:'shampooBottle',unit:'ml',daily:1,color:['#e2ddd0','#9a8160','#5f4931']},
@@ -1125,7 +1126,7 @@ const DETECT_MAP=[
   {kw:['洗手液','皂液'],cat:'清洁',shape:'shampooBottle',unit:'ml',daily:5,color:['#d8ecd8','#489048','#185818']},
 ];
 const ITEM_CATEGORIES=[
-  '面膜','面霜','水','乳液','精华','洁面','护手霜','身体乳','防晒','香水',
+  '面膜','面霜','眼霜','水','乳液','精华','洁面','护手霜','身体乳','防晒','香水',
   '洗发水','护发精油','护发素',
   '底妆','修容','口红','眼线笔','腮红','高光','假睫毛','散粉','定妆喷雾',
   '口腔','清洁','纸品','其他',
@@ -1251,6 +1252,18 @@ function isMockData(data){
   const first=data[0]||{};
   return first.name==='神仙水'&&first.brand==='SK-II';
 }
+function migrateRequestedCategories(sourceItems){
+  let changed=false;
+  const migrated=sourceItems.map(item=>{
+    const searchable=`${item?.name||''} ${item?.brand||''}`;
+    if(item?.cat==='面霜'&&searchable.includes('伊丽莎白雅顿')&&/(眼部|眼霜)/.test(searchable)){
+      changed=true;
+      return {...item,cat:'眼霜'};
+    }
+    return item;
+  });
+  return {items:migrated,changed};
+}
 function loadItems(){
   try{
     const s=localStorage.getItem(PANTRY_ITEMS_KEY);
@@ -1258,7 +1271,9 @@ function loadItems(){
     const data=JSON.parse(s);
     // 如果检测到仍然是内置示例数据，视为“无真实数据”
     if(isMockData(data))return [];
-    return data;
+    const migrated=migrateRequestedCategories(data);
+    if(migrated.changed)localStorage.setItem(PANTRY_ITEMS_KEY,JSON.stringify(migrated.items));
+    return migrated.items;
   }catch{
     return [];
   }
@@ -1328,11 +1343,13 @@ function setFamilyMeta(familyId,version){
 }
 
 function applyCloudData(data){
-  const nextItems=Array.isArray(data?.items)?data.items:[];
+  const migrated=migrateRequestedCategories(Array.isArray(data?.items)?data.items:[]);
+  const nextItems=migrated.items;
   const nextLocations=Array.isArray(data?.locations)?data.locations:[];
   items=nextItems;
   try{localStorage.setItem(PANTRY_ITEMS_KEY,JSON.stringify(nextItems));}catch{}
   try{localStorage.setItem(PANTRY_LOCATIONS_KEY,JSON.stringify(nextLocations));}catch{}
+  return migrated.changed;
 }
 
 async function ensureFamily(){
@@ -1373,10 +1390,9 @@ function connectCloud(){
       const localHasData=getCurrentPayload().items.length>0;
       const serverHasData=Array.isArray(serverData.items)&&serverData.items.length>0;
       setFamilyMeta(data.familyId,data.version||1);
-      if(serverHasData)applyCloudData(serverData);
-      else if(!localHasData)applyCloudData(serverData);
+      const migratedServerData=serverHasData?applyCloudData(serverData):(!localHasData?applyCloudData(serverData):false);
       cloudReady=true;
-      if(!serverHasData&&localHasData)await pushCloudNow();
+      if((!serverHasData&&localHasData)||migratedServerData)await pushCloudNow();
       cloudState='ready';
       if(activeTab===0)renderDashboard();else renderGallery();
       updateAlert();

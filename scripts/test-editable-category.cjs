@@ -70,7 +70,7 @@ async function waitForSettledScreen(page, targetId) {
     assert.equal(await page.locator('#fi-category').count(), 1, 'missing #fi-category category selector');
 
     const expectedCategories = [
-      '面膜', '面霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
+      '面膜', '面霜', '眼霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
       '洗发水', '护发精油', '护发素',
       '底妆', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
       '口腔', '清洁', '纸品', '其他',
@@ -86,10 +86,56 @@ async function waitForSettledScreen(page, targetId) {
     assert.deepEqual(await page.evaluate(() => [
       detectItem('补水面膜')?.cat,
       detectItem('夜间保湿面霜')?.cat,
+      detectItem('紧致眼霜')?.cat,
       detectItem('安热沙防晒乳')?.cat,
       detectItem('丝绒口红')?.cat,
       detectItem('旅行洗发水')?.cat,
-    ]), ['面膜', '面霜', '防晒', '口红', '洗发水'], 'automatic detection suggests detailed flat categories');
+    ]), ['面膜', '面霜', '眼霜', '防晒', '口红', '洗发水'], 'automatic detection suggests detailed flat categories');
+    assert.deepEqual(await page.evaluate(() => migrateRequestedCategories([
+      { id: 'arden-eye', name: '面霜-伊丽莎白雅顿眼部', brand: '', cat: '面霜' },
+      { id: 'other-cream', name: '经典面霜', brand: '其他品牌', cat: '面霜' },
+    ]).items.map(item => ({ id: item.id, cat: item.cat }))), [
+      { id: 'arden-eye', cat: '眼霜' },
+      { id: 'other-cream', cat: '面霜' },
+    ], 'only the requested Elizabeth Arden eye item migrates from 面霜 to 眼霜');
+    const migrationSync = await page.evaluate(async () => {
+      items = [];
+      cloudReady = false;
+      cloudInitPromise = null;
+      pantryFamilyId = null;
+      pantryFamilyVersion = 0;
+      window.__migratedCloudPayload = null;
+      ensureFamily = async () => ({
+        familyId: 'migration-family',
+        version: 7,
+        data: {
+          items: [{ id: 'arden-eye', name: '面霜-伊丽莎白雅顿眼部', brand: '', cat: '面霜' }],
+          locations: [],
+        },
+      });
+      pushCloudNow = async () => {
+        window.__migratedCloudPayload = JSON.parse(JSON.stringify(getCurrentPayload()));
+      };
+      await connectCloud();
+      return {
+        itemCategory: items[0]?.cat,
+        localCategory: JSON.parse(localStorage.getItem(PANTRY_ITEMS_KEY) || '[]')[0]?.cat,
+        pushedCategory: window.__migratedCloudPayload?.items?.[0]?.cat,
+      };
+    });
+    assert.deepEqual(migrationSync, {
+      itemCategory: '眼霜',
+      localCategory: '眼霜',
+      pushedCategory: '眼霜',
+    }, 'the targeted cloud item migrates locally and is pushed back through the existing sync path');
+    await page.evaluate(() => {
+      items = [];
+      cloudReady = false;
+      cloudInitPromise = null;
+      localStorage.setItem(PANTRY_ITEMS_KEY, '[]');
+      nav('scr-add');
+    });
+    await waitForSettledScreen(page, 'scr-add');
 
     // A recognized manual name selects its rule category, but a user override is authoritative.
     await page.locator('#mf-name').fill('旅行洗发水 原味');

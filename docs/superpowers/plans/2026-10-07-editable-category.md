@@ -33,7 +33,7 @@ The corrected test must assert the product vocabulary explicitly rather than der
 
 ```js
 const expectedCategories = [
-  '面膜', '面霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
+  '面膜', '面霜', '眼霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
   '洗发水', '护发精油', '护发素',
   '底妆', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
   '口腔', '清洁', '纸品', '其他',
