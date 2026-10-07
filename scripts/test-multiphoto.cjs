@@ -121,6 +121,77 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       window.__createdObjectUrls = [];
       window.__revokedObjectUrls = [];
     });
+
+    await page.evaluate(() => {
+      window.__originalPreviewLoader = loadPendingPhotoPreview;
+      let resolvePreview;
+      loadPendingPhotoPreview = file => new Promise(resolve => {
+        const objectUrl = URL.createObjectURL(file);
+        window.__stalePreviewUrl = objectUrl;
+        resolvePreview = () => resolve(objectUrl);
+      });
+      window.__staleAddPromise = addPendingPhotos([
+        new File(['stale'], 'stale.png', { type: 'image/png' })
+      ]);
+      window.__resolveStalePreview = () => resolvePreview();
+      nav('scr-home');
+    });
+    await page.evaluate(async () => {
+      window.__resolveStalePreview();
+      await window.__staleAddPromise;
+      loadPendingPhotoPreview = window.__originalPreviewLoader;
+    });
+    assert.equal(await page.evaluate(() => pendingPhotos.length), 0, 'late decode cannot restore a cleared photo');
+    assert.equal(
+      await page.evaluate(() => window.__revokedObjectUrls.filter(url => url === window.__stalePreviewUrl).length),
+      1,
+      'late decoded preview is revoked exactly once'
+    );
+    assert.equal(await page.evaluate(() => pendingPhotoReservations), 0, 'generation reset leaves no negative or stale reservation');
+    await page.waitForTimeout(250);
+    await page.evaluate(() => nav('scr-add'));
+
+    const concurrentCount = await page.evaluate(async () => {
+      const originalLoader = loadPendingPhotoPreview;
+      loadPendingPhotoPreview = file => new Promise(resolve => {
+        const objectUrl = URL.createObjectURL(file);
+        setTimeout(() => resolve(objectUrl), 20);
+      });
+      const make = name => new File([name], name, { type: 'image/png' });
+      await Promise.all([
+        addPendingPhotos([make('concurrent-1.png'), make('concurrent-2.png')]),
+        addPendingPhotos([make('concurrent-3.png'), make('concurrent-4.png')])
+      ]);
+      loadPendingPhotoPreview = originalLoader;
+      return pendingPhotos.length;
+    });
+    assert.equal(concurrentCount, 3, 'concurrent additions synchronously share the three available slots');
+    assert.equal(await page.evaluate(() => pendingPhotoReservations), 0, 'all current-generation reservations are released');
+    await page.evaluate(() => clearPendingPhotos());
+
+    await page.evaluate(async () => {
+      const OriginalImage = window.Image;
+      window.Image = class StubDecodedImage {
+        set src(value) {
+          this.currentSrc = value;
+          queueMicrotask(() => this.onload());
+        }
+      };
+      await addPendingPhotos([
+        new File(['valid'], 'empty-mime.png', { type: '' }),
+        new File(['bad'], 'explicit-text.txt', { type: 'text/plain' }),
+        new File(['valid'], 'typed-image.png', { type: 'image/png' })
+      ]);
+      window.Image = OriginalImage;
+    });
+    assert.deepEqual(
+      await page.locator('.pending-photo img').evaluateAll(images => images.map(image => image.alt)),
+      ['预览 empty-mime.png', '预览 typed-image.png'],
+      'empty MIME files may pass decoding while explicit non-image MIME is rejected'
+    );
+    assert.match(await page.locator('#pending-photo-error').innerText(), /explicit-text\.txt/);
+    await page.evaluate(() => clearPendingPhotos());
+
     for (const name of ['camera-1.png', 'camera-2.png']) {
       chooserPromise = page.waitForEvent('filechooser', { timeout: 5000 });
       await page.locator(name === 'camera-1.png' ? '#photo-intake-entry' : '#add-pending-photo').click();
@@ -209,7 +280,7 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     assert.match(await page.locator('#pending-photo-status').innerText(), /尚未添加|0\/3/);
     assert.equal(recognitionCalls, 0);
     assert.deepEqual(errors, [], 'no browser runtime errors');
-    console.log('PASS: consent gate, single/multi intake, 3-photo collection, URL cleanup, cancellation, order entry, responsive layout');
+    console.log('PASS: consent gate, async-safe 3-photo collection, MIME validation, URL cleanup, cancellation, order entry, responsive layout');
   } finally {
     await browser.close();
   }

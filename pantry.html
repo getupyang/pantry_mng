@@ -2606,6 +2606,8 @@ const MAX_SINGLE_ITEM_PHOTOS=3;
 let pendingPhotos=[];
 let photoRecognitionBusy=false;
 let pendingPhotoMessage='';
+let pendingPhotoGeneration=0;
+let pendingPhotoReservations=0;
 
 function setIntakeMode(mode){
   const next=mode==='multi'?'multi':'single';
@@ -2621,7 +2623,7 @@ function setIntakeMode(mode){
 
 function loadPendingPhotoPreview(file){
   return new Promise((resolve,reject)=>{
-    if(!file||!file.type||!file.type.startsWith('image/')){
+    if(!file||(file.type&&!file.type.toLowerCase().startsWith('image/'))){
       reject(new Error('不是可用的图片文件'));
       return;
     }
@@ -2639,24 +2641,35 @@ function loadPendingPhotoPreview(file){
 async function addPendingPhotos(files){
   const selected=Array.from(files||[]);
   if(!selected.length)return;
+  const generation=pendingPhotoGeneration;
   const errors=[];
   const ignored=[];
   for(const file of selected){
-    if(pendingPhotos.length>=MAX_SINGLE_ITEM_PHOTOS){
+    if(generation!==pendingPhotoGeneration)break;
+    if(pendingPhotos.length+pendingPhotoReservations>=MAX_SINGLE_ITEM_PHOTOS){
       ignored.push(file.name||'未命名文件');
       continue;
     }
+    pendingPhotoReservations+=1;
     try{
       const objectUrl=await loadPendingPhotoPreview(file);
+      if(generation!==pendingPhotoGeneration){
+        URL.revokeObjectURL(objectUrl);
+        continue;
+      }
+      pendingPhotoReservations=Math.max(0,pendingPhotoReservations-1);
       pendingPhotos.push({
         id:crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`,
         file,
         objectUrl
       });
     }catch(error){
+      if(generation!==pendingPhotoGeneration)continue;
+      pendingPhotoReservations=Math.max(0,pendingPhotoReservations-1);
       errors.push(`${file?.name||'未命名文件'}：${error.message||'图片无法读取'}`);
     }
   }
+  if(generation!==pendingPhotoGeneration)return;
   if(ignored.length)errors.push(`最多添加 ${MAX_SINGLE_ITEM_PHOTOS} 张，已忽略：${ignored.join('、')}`);
   pendingPhotoMessage=errors.join('；');
   renderPendingPhotos();
@@ -2709,6 +2722,8 @@ function renderPendingPhotos(){
 }
 
 function clearPendingPhotos(){
+  pendingPhotoGeneration+=1;
+  pendingPhotoReservations=0;
   pendingPhotos.forEach(photo=>URL.revokeObjectURL(photo.objectUrl));
   pendingPhotos=[];
   photoRecognitionBusy=false;
