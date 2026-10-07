@@ -33,47 +33,40 @@ function getIpHash(req) {
   return createHash("sha256").update(`pantry:${ip}`).digest("hex").slice(0, 32);
 }
 
-function hasImage(value) {
-  if (!value) return false;
-  if (typeof value === "string") return value.startsWith("data:image/");
-  if (Array.isArray(value)) return value.some(hasImage);
-  if (typeof value === "object") {
-    if (value.type === "image_url" && typeof value.image_url?.url === "string") {
-      return value.image_url.url.startsWith("data:image/");
-    }
-    return Object.values(value).some(hasImage);
-  }
-  return false;
-}
-
-function findImageDataUrl(value) {
-  if (!value) return null;
-  if (typeof value === "string" && value.startsWith("data:image/")) return value;
+export function extractImageDataUrls(value, found = []) {
+  if (!value) return found;
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findImageDataUrl(item);
-      if (found) return found;
-    }
+    for (const item of value) extractImageDataUrls(item, found);
+    return found;
   }
-  if (typeof value === "object") {
-    if (value.type === "image_url" && typeof value.image_url?.url === "string") {
-      return value.image_url.url.startsWith("data:image/") ? value.image_url.url : null;
-    }
-    for (const item of Object.values(value)) {
-      const found = findImageDataUrl(item);
-      if (found) return found;
-    }
+  if (typeof value !== "object") return found;
+  if (
+    value.type === "image_url" &&
+    typeof value.image_url?.url === "string" &&
+    value.image_url.url.startsWith("data:image/")
+  ) {
+    found.push(value.image_url.url);
   }
-  return null;
+  for (const item of Object.values(value)) extractImageDataUrls(item, found);
+  return found;
 }
 
-function sanitizeVisionRequest(body) {
+export function serializeReviewImages(urls) {
+  if (!Array.isArray(urls) || urls.length === 0) return null;
+  return urls.length === 1 ? urls[0] : JSON.stringify(urls);
+}
+
+export function sanitizeVisionRequest(body, reqType = "photo") {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   if (!messages.length) {
     return { error: "messages is required" };
   }
-  if (!hasImage(messages)) {
-    return { error: "Only image recognition requests are allowed" };
+  const imageCount = extractImageDataUrls(messages).length;
+  if (reqType === "order" && imageCount !== 1) {
+    return { error: "Order recognition requires exactly 1 image" };
+  }
+  if (reqType !== "order" && (imageCount < 1 || imageCount > 3)) {
+    return { error: "Photo recognition requires 1..3 images" };
   }
 
   const requestedModels = Array.isArray(body.models)
@@ -154,7 +147,8 @@ async function recordUsage({ familyId, clientId, ipHash, reqType, models, status
   }
 }
 
-async function createRecognitionReview({ familyId, clientId, reqType, imageDataUrl, models, modelResponse, outcome, errorCode }) {
+async function createRecognitionReview({ familyId, clientId, reqType, imageDataUrls, models, modelResponse, outcome, errorCode }) {
+  const imageDataUrl = serializeReviewImages(imageDataUrls);
   if (!imageDataUrl) return null;
   const { resp, data } = await sbPost(
     "pantry_recognition_reviews?select=id",
@@ -210,12 +204,12 @@ export default async function handler(req, res) {
       res.status(413).json({ error: { message: "Image request is too large" } });
       return;
     }
-    const sanitized = sanitizeVisionRequest(body);
+    const sanitized = sanitizeVisionRequest(body, reqType);
     if (sanitized.error) {
       res.status(400).json({ error: { message: sanitized.error } });
       return;
     }
-    const imageDataUrl = reviewConsent ? findImageDataUrl(sanitized.body.messages) : null;
+    const imageDataUrls = reviewConsent ? extractImageDataUrls(sanitized.body.messages) : [];
 
     const rate = await checkRateLimit({ clientId, familyId, ipHash });
     if (!rate.ok) {
@@ -253,7 +247,7 @@ export default async function handler(req, res) {
         familyId,
         clientId,
         reqType,
-        imageDataUrl,
+        imageDataUrls,
         models: sanitized.models,
         modelResponse: data,
         outcome: "error",
@@ -282,7 +276,7 @@ export default async function handler(req, res) {
       familyId,
       clientId,
       reqType,
-      imageDataUrl,
+      imageDataUrls,
       models: sanitized.models,
       modelResponse: data,
       outcome: "recognized",
