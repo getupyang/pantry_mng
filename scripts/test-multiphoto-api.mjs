@@ -43,12 +43,14 @@ test("photo rejects zero or four images with a 1..3 error", () => {
   }
 });
 
-test("order accepts exactly one screenshot and rejects two", () => {
+test("order accepts exactly one screenshot and rejects zero or two", () => {
   assert.equal(sanitizeVisionRequest(request([image(dataUrls[0])]), "order").error, undefined);
-  assert.match(
-    sanitizeVisionRequest(request(dataUrls.slice(0, 2).map(image)), "order").error,
-    /exactly 1|one image/i,
-  );
+  for (const nodes of [[], dataUrls.slice(0, 2).map(image)]) {
+    assert.match(
+      sanitizeVisionRequest(request(nodes), "order").error,
+      /exactly 1|one image/i,
+    );
+  }
 });
 
 test("text beginning with a data image URL is not counted as an image", () => {
