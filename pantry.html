@@ -2924,6 +2924,12 @@ function parseRecognitionResult(result){
 // 从文本中提取信息（fallback）
 function extractFromText(text){
   const result={};
+  const sameProductMatch=text.match(/(?:^|\n)\s*["'“”]?(?:sameProduct|是否同一商品)["'“”]?\s*[:：=]\s*["'“”]?\s*(true|false)\s*["'“”]?\s*,?\s*(?=\n|$)/im);
+  if(sameProductMatch)result.sameProduct=sameProductMatch[1];
+  const conflictReasonMatch=text.match(/(?:^|\n)\s*["'“”]?(?:conflictReason|冲突原因)["'“”]?\s*[:：=]\s*(.+?)\s*,?\s*(?=\n|$)/im);
+  if(conflictReasonMatch){
+    result.conflictReason=conflictReasonMatch[1].trim().replace(/^["'“”]+|["'“”]+$/g,'').trim();
+  }
   const nameMatch=text.match(/品名[：:]\s*([^\n]+)/i)||text.match(/name[：:]\s*([^\n]+)/i);
   if(nameMatch)result.name=nameMatch[1].trim();
   const brandMatch=text.match(/品牌[：:]\s*([^\n]+)/i)||text.match(/brand[：:]\s*([^\n]+)/i);

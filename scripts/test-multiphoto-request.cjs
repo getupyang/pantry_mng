@@ -140,6 +140,22 @@ test('postProcessRecognitionResult normalizes sameProduct safely and bounds conf
   assert.equal(conflict.conflictReason,conflict.conflictReason.trim());
 });
 
+test('parseRecognitionResult preserves explicit conflicts from non-JSON fallback text',()=>{
+  const {parseRecognitionResult}=visionContext();
+  const parsed=parseRecognitionResult({choices:[{message:{content:`
+品名：洗发水
+品牌: 品牌甲
+packageSize：250
+unit: ml
+sameProduct： "false"
+conflictReason:   品牌不同${'   '}
+`}}]});
+  assert.equal(parsed.name,'洗发水');
+  assert.equal(parsed.sameProduct,false);
+  assert.equal(parsed.sameProduct===false,true);
+  assert.equal(parsed.conflictReason,'品牌不同');
+});
+
 test('recognizePhoto preprocesses two photos sequentially and fetches one ordered request',async()=>{
   const {context,fetchCalls,preprocessEvents}=recognitionContext();
   await context.recognizePhoto([
