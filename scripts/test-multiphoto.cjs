@@ -13,6 +13,8 @@ const png = Buffer.from(
   'base64'
 );
 const image = name => ({ name, mimeType: 'image/png', buffer: png });
+const adminImageBase = `data:image/png;base64,${png.toString('base64')}`;
+const adminValidImages = [adminImageBase, `${adminImageBase}#second`, `${adminImageBase}#third`, `${adminImageBase}#fourth`];
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
@@ -73,8 +75,6 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
       }
       if (url.pathname === '/api/admin/recognition-reviews') {
         adminTokens.push(route.request().headers()['x-admin-token']);
-        const firstImage = `data:image/png;base64,${png.toString('base64')}`;
-        const secondImage = `data:image/png;base64,${png.toString('base64')}`;
         const baseReview = {
           outcome: 'recognized',
           reqType: 'photo',
@@ -89,8 +89,21 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ reviews: [
-            { ...baseReview, imageDataUrls: [firstImage, secondImage], imageDataUrl: firstImage },
-            { ...baseReview, imageDataUrl: firstImage },
+            {
+              ...baseReview,
+              imageDataUrls: [
+                adminValidImages[0],
+                'javascript:alert(1)',
+                adminValidImages[1],
+                'data:image/svg+xml;base64,PHN2Zy8+',
+                { src: adminValidImages[2] },
+                adminValidImages[2],
+                adminValidImages[3],
+                'http://example.test/unsafe.png'
+              ],
+              imageDataUrl: adminValidImages[0]
+            },
+            { ...baseReview, imageDataUrl: adminValidImages[0] },
             { ...baseReview }
           ] })
         });
@@ -830,10 +843,15 @@ const image = name => ({ name, mimeType: 'image/png', buffer: png });
     await page.waitForFunction(() => document.querySelectorAll('.review-card').length === 3);
     const reviewCards = page.locator('.review-card');
     assert.equal(await reviewCards.nth(0).locator('.review-images').count(), 1, 'multi-photo review renders one image group');
-    assert.equal(await reviewCards.nth(0).locator('.review-images img').count(), 2, 'multi-photo review renders every image once');
+    assert.equal(await reviewCards.nth(0).locator('.review-images img').count(), 3, 'multi-photo review renders at most three safe images');
+    assert.deepEqual(
+      await reviewCards.nth(0).locator('.review-images img').evaluateAll(images => images.map(image => image.getAttribute('src'))),
+      adminValidImages.slice(0, 3),
+      'unsafe entries are filtered while valid image order is preserved and the fourth valid image is capped'
+    );
     assert.deepEqual(
       await reviewCards.nth(0).locator('.review-images img').evaluateAll(images => images.map(image => image.alt)),
-      ['识别样本照片 1', '识别样本照片 2'],
+      ['识别样本照片 1', '识别样本照片 2', '识别样本照片 3'],
       'grouped review images have indexed accessible labels'
     );
     assert.equal(await reviewCards.nth(1).locator('.review-images img').count(), 1, 'legacy review renders its single image');
