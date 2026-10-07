@@ -101,7 +101,7 @@ python3 -m http.server 8000
 
 ### 显式线上识别 smoke（会写入一个新的测试家庭）
 
-该脚本接受 1–3 张同一件商品的图片。preview/production 运行必须提供管理员令牌，以便核对后台识别记录确实保存了全部图片；令牌只通过环境变量传入，不要写进仓库或测试输出。
+该脚本接受 1–3 张同一件商品的图片。每次运行都必须提供管理员令牌，以便核对后台识别记录确实保存了全部图片；令牌只通过环境变量传入，不要写进仓库或测试输出。本地使用 `scripts/dev-server.cjs` 时，代理也只允许把管理员令牌转发给识别记录读取接口。
 
 ```bash
 PANTRY_BASE_URL=https://<preview-or-production-host> \
@@ -110,7 +110,17 @@ PLAYWRIGHT_MODULE=/Users/getupyang/.agents/skills/gstack/node_modules/playwright
 node scripts/test-photo-live.cjs /absolute/path/front.jpg /absolute/path/expiry.jpg
 ```
 
-脚本会等待显式点击“开始识别”后才调用识别 API，随后选择包装类型、只保存一条记录，并独立执行家庭数据 GET、刷新回读和后台图片数量检查。它会产生真实模型调用和云端测试数据，不属于默认本地回归。
+若使用规格为 12 的受控测试样品，可额外要求识别结果精确匹配该规格：
+
+```bash
+PANTRY_BASE_URL=https://<preview-or-production-host> \
+PANTRY_ADMIN_TOKEN='<从安全环境注入>' \
+PANTRY_EXPECTED_PACKAGE_SIZE=12 \
+PLAYWRIGHT_MODULE=/Users/getupyang/.agents/skills/gstack/node_modules/playwright \
+node scripts/test-photo-live.cjs /absolute/path/controlled-12-front.jpg /absolute/path/controlled-12-expiry.jpg
+```
+
+未设置 `PANTRY_EXPECTED_PACKAGE_SIZE` 时，脚本仍会要求识别规格是正数，并核对云端和本地回读值与识别值一致。脚本会等待显式点击“开始识别”后才调用识别 API，随后选择包装类型、只保存一条记录，并独立执行家庭数据 GET、刷新回读和精确的后台 family/review 图片数量检查。每次运行会创建独立的临时 evidence 目录并输出完整路径，不会复用旧成功文件。它会产生真实模型调用和云端测试数据，不属于默认本地回归。
 
 ---
 

@@ -2,27 +2,81 @@
 // PANTRY_BASE_URL=https://preview.example PANTRY_ADMIN_TOKEN=... \
 // PLAYWRIGHT_MODULE=/path/to/playwright node scripts/test-photo-live.cjs /path/front.jpg /path/expiry.jpg
 const fs = require('node:fs/promises');
+const { constants: fsConstants } = require('node:fs');
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const path = require('node:path');
 
-function parseImagePaths(args) {
+async function validateImagePaths(args) {
   if (!Array.isArray(args) || args.length < 1 || args.length > 3) {
     throw new Error('Live photo smoke requires 1 to 3 image paths');
   }
-  return args.map(value => String(value));
+  const imagePaths = args.map(value => String(value));
+  for (const imagePath of imagePaths) {
+    if (!imagePath.trim()) throw new Error('Image paths must be non-empty');
+    if (imagePath.startsWith('-')) throw new Error(`Image path must not be flag-like: ${imagePath}`);
+    let stat;
+    try {
+      await fs.access(imagePath, fsConstants.R_OK);
+      stat = await fs.stat(imagePath);
+    } catch (error) {
+      throw new Error(`Image path does not exist or cannot be read: ${imagePath}`, { cause: error });
+    }
+    if (!stat.isFile()) throw new Error(`Image path must be a regular file: ${imagePath}`);
+  }
+  return imagePaths;
 }
 
-function requiresAdminToken(baseURL) {
-  const url = new URL(baseURL);
-  return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+function parseAdminToken(value) {
+  const token = String(value || '').trim();
+  if (!token) throw new Error('PANTRY_ADMIN_TOKEN is required for every live smoke');
+  return token;
+}
+
+function parseExpectedPackageSize(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error('PANTRY_EXPECTED_PACKAGE_SIZE must be a positive number');
+  }
+  return size;
+}
+
+async function createEvidencePaths() {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pantry-live-'));
+  return {
+    directory,
+    evidence: path.join(directory, 'evidence.json'),
+    screenshot: path.join(directory, 'travel.png')
+  };
+}
+
+async function assertSuccessfulResponse(response, label) {
+  const status = response.status();
+  const body = await response.text();
+  assert.equal(status, 200, `${label} returned HTTP ${status}; body: ${body}`);
+  return { status, body };
+}
+
+function verifyAdminReview(payload, familyId, reviewId, imageCount) {
+  const review = payload.reviews?.find(candidate => (
+    candidate.id === reviewId && candidate.familyId === familyId
+  ));
+  assert.ok(review, `recognition review ${reviewId} for family ${familyId} was not returned by the admin API`);
+  assert.equal(
+    review.imageDataUrls?.length,
+    imageCount,
+    `recognition review ${reviewId} does not contain all supplied images`
+  );
+  return review;
 }
 
 async function main() {
-  const imagePaths = parseImagePaths(process.argv.slice(2));
+  const imagePaths = await validateImagePaths(process.argv.slice(2));
   const baseURL = process.env.PANTRY_BASE_URL || 'http://127.0.0.1:8031';
-  const adminToken = process.env.PANTRY_ADMIN_TOKEN || '';
-  if (requiresAdminToken(baseURL) && !adminToken) {
-    throw new Error('PANTRY_ADMIN_TOKEN is required for preview/production live smoke');
-  }
+  const adminToken = parseAdminToken(process.env.PANTRY_ADMIN_TOKEN);
+  const expectedPackageSize = parseExpectedPackageSize(process.env.PANTRY_EXPECTED_PACKAGE_SIZE);
+  const evidencePaths = await createEvidencePaths();
 
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const proxy = baseURL.startsWith('https:') && process.env.HTTPS_PROXY
@@ -76,15 +130,21 @@ async function main() {
       packageType: document.getElementById('fi-package-type').value
     }));
     console.log('Recognized:', JSON.stringify(recognized));
-    assert.equal(recognized.size, '12');
+    const recognizedPackageSize = Number(recognized.size);
+    assert.equal(Number.isFinite(recognizedPackageSize) && recognizedPackageSize > 0, true, 'recognized package size must be a positive number');
+    if (expectedPackageSize !== null) {
+      assert.equal(recognizedPackageSize, expectedPackageSize, 'recognized package size differs from PANTRY_EXPECTED_PACKAGE_SIZE');
+    }
     assert.equal(recognized.packageType, '', 'type remains user-controlled');
     await page.locator('#fi-package-type').selectOption('travel');
     const savedPromise = page.waitForResponse(
-      response => response.request().method() === 'PUT' && response.url().includes('/api/families/') && response.status() === 200,
+      response => response.request().method() === 'PUT' && response.url().includes('/api/families/'),
       { timeout: 60000 }
     );
     await page.getByRole('button', { name: '确认录入 →', exact: true }).click();
-    await savedPromise;
+    const savedResponse = await savedPromise;
+    const saveResult = await assertSuccessfulResponse(savedResponse, 'family PUT');
+    console.log('Family PUT:', JSON.stringify(saveResult));
 
     const evidence = await page.evaluate(async () => {
       const response = await fetch('/api/families/' + pantryFamilyId, {
@@ -104,26 +164,22 @@ async function main() {
     assert.equal(evidence.local.length, 1, 'local state must contain exactly one item');
     const saved = evidence.server.data.items[0];
     assert.equal(saved.packageType, 'travel');
-    assert.equal(saved.packageSize, 12);
+    assert.equal(saved.packageSize, recognizedPackageSize, 'server read-back size must match recognized size');
     assert.equal(evidence.local[0].packageType, 'travel');
+    assert.equal(evidence.local[0].packageSize, recognizedPackageSize, 'local read-back size must match recognized size');
 
-    if (adminToken) {
-      const adminResponse = await page.request.get(
-        baseURL + '/api/admin/recognition-reviews?familyId=' + encodeURIComponent(evidence.familyId) + '&limit=80',
-        { headers: { 'X-Admin-Token': adminToken } }
-      );
-      assert.equal(adminResponse.status(), 200, 'admin recognition-review lookup failed');
-      const adminPayload = await adminResponse.json();
-      const review = adminPayload.reviews?.find(candidate => candidate.id === reviewId);
-      assert.ok(review, `recognition review ${reviewId} was not returned by the admin API`);
-      assert.equal(
-        review.imageDataUrls?.length,
-        imagePaths.length,
-        `recognition review ${reviewId} does not contain all supplied images`
-      );
-    } else if (requiresAdminToken(baseURL)) {
-      throw new Error('PANTRY_ADMIN_TOKEN is required to verify recognition review images');
+    const adminResponse = await page.request.get(
+      baseURL + '/api/admin/recognition-reviews?familyId=' + encodeURIComponent(evidence.familyId) + '&limit=80',
+      { headers: { 'X-Admin-Token': adminToken } }
+    );
+    const adminResult = await assertSuccessfulResponse(adminResponse, 'admin recognition-review GET');
+    let adminPayload;
+    try {
+      adminPayload = JSON.parse(adminResult.body);
+    } catch (error) {
+      throw new Error(`admin recognition-review GET returned invalid JSON: ${adminResult.body}`, { cause: error });
     }
+    verifyAdminReview(adminPayload, evidence.familyId, reviewId, imagePaths.length);
 
     await page.evaluate(() => switchTab(1));
     await page.getByRole('button', { name: '旅行装', exact: true }).click();
@@ -136,19 +192,26 @@ async function main() {
     await page.getByRole('button', { name: '正装', exact: true }).click();
     assert.equal(await page.locator('.gcard').count(), 0);
     await page.getByRole('button', { name: '旅行装', exact: true }).click();
-    await page.screenshot({ path: '/tmp/pantry-live-travel.png', animations: 'disabled' });
+    await page.screenshot({ path: evidencePaths.screenshot, animations: 'disabled' });
     assert.deepEqual(errors, []);
     await fs.writeFile(
-      '/tmp/pantry-live-evidence.json',
+      evidencePaths.evidence,
       JSON.stringify({ recognized, reviewId, imageCount: imagePaths.length, ...evidence, responses, errors }, null, 2)
     );
-    console.log(`PASS ${imagePaths.length} photo(s), one recognition request, review image count, one-item save, independent GET, local storage, reload and filters; evidence /tmp/pantry-live-evidence.json`);
+    console.log(`PASS ${imagePaths.length} photo(s), one recognition request, exact family/review image count, one-item save, independent GET, local storage, reload and filters; evidence ${evidencePaths.evidence}; screenshot ${evidencePaths.screenshot}`);
   } finally {
     await browser.close();
   }
 }
 
-module.exports = { parseImagePaths, requiresAdminToken };
+module.exports = {
+  assertSuccessfulResponse,
+  createEvidencePaths,
+  parseAdminToken,
+  parseExpectedPackageSize,
+  validateImagePaths,
+  verifyAdminReview
+};
 
 if (require.main === module) {
   main().catch(error => {
