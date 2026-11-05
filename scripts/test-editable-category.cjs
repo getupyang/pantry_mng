@@ -72,7 +72,7 @@ async function waitForSettledScreen(page, targetId) {
     const expectedCategories = [
       '面膜', '面霜', '眼霜', '水', '乳液', '精华', '洁面', '护手霜', '身体乳', '防晒', '香水',
       '洗发水', '护发精油', '护发素',
-      '底妆', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
+      '气垫', '粉底液', '修容', '口红', '眼线笔', '腮红', '高光', '假睫毛', '散粉', '定妆喷雾',
       '口腔', '清洁', '纸品', '其他',
     ];
     for (const selector of ['#mf-category', '#fi-category']) {
@@ -91,6 +91,14 @@ async function waitForSettledScreen(page, targetId) {
       detectItem('丝绒口红')?.cat,
       detectItem('旅行洗发水')?.cat,
     ]), ['面膜', '面霜', '眼霜', '防晒', '口红', '洗发水'], 'automatic detection suggests detailed flat categories');
+    assert.deepEqual(await page.evaluate(() => [
+      detectItem('雅诗兰黛气垫')?.cat,
+      detectItem('兰蔻粉底液')?.cat,
+    ]), ['气垫', '粉底液'], '气垫与粉底液被识别为各自独立分类');
+    assert.deepEqual(await page.evaluate(() => [
+      detectItem('雅诗兰黛气垫')?.substitutes,
+      detectItem('兰蔻粉底液')?.substitutes,
+    ]), [['粉底液'], ['气垫']], '气垫与粉底液互为替代');
     assert.deepEqual(await page.evaluate(() => migrateRequestedCategories([
       { id: 'arden-eye', name: '面霜-伊丽莎白雅顿眼部', brand: '', cat: '面霜' },
       { id: 'other-cream', name: '经典面霜', brand: '其他品牌', cat: '面霜' },
