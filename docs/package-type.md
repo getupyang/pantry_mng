@@ -1,0 +1,29 @@
+## 2026-10-06 · 包装类型与物品库筛选
+
+- 记录时间：2026-10-06。
+- 分支：`codex/package-type-filter`；功能 commit：`c2c0d5c`；合并线上修复 commit：`8712412`；初始基线：`993b9c6`。
+- 涉及文件：`pantry.html`、`scripts/test-package-type.cjs`、本文档。
+- 用户可见变化：手动、照片确认、订单逐件确认均须手动选择旅行装、正装或补充装；不根据容量、品名或模型结果自动选择包装类型。
+- 物品库顶部常驻包装筛选，卡片显示类型，详情支持修改；筛选保存在当前浏览器，返回详情、切换页签和刷新均保留。仪表盘仍展示整体库存。
+- 旧数据没有字段时显示“未设置”，只在“全部”中出现；不批量推断或修改旧记录。订单下一件和成功录入后的表单清空选择。
+- 数据字段：`packageType: travel | regular | refill`。沿用 items 的本地保存、JSON 导入导出和家庭云同步，不新增数据库列。既有 `supplement` 倒入关系不受标签控制。
+- 同时修复 `PANTRY_ITEMS_KEY` 定义晚于 `loadItems()` 调用导致本地读取失败的问题，保证刷新后的本地数据可恢复。
+- 验收：录入一件旅行装 → 物品库点击旅行装 → 打开详情返回 → 刷新并回到物品库；应保留该筛选。旧物品可在详情中补类型。未选类型时确认录入应被阻止。
+- 验证命令：先 `python3 -m http.server 8031`，再 `PLAYWRIGHT_MODULE=/path/to/playwright node scripts/test-package-type.cjs`；`git diff --check -- pantry.html`。
+- 验证范围：语法 smoke + 浏览器局部回归，覆盖必选、手动录入、筛选持久化、旧物品修改、导出、空结果、订单切换和 320/390/1280 宽度下的可见列表布局。所有 API 请求 mock，不调用真实模型或修改云数据。
+- 实测时间：2026-10-06 01:04 KST。用户提供图片的真实上传识别、手动选择旅行装、PUT 保存、独立 GET 回读和刷新筛选均通过；测试家庭版本 1 → 2，服务端返回 `packageType: travel`。测试使用独立家庭，不混入已有库存。私有测试图片、具体库存内容和家庭凭据仅留在本机临时证据中，不纳入仓库。
+- 本地完整服务：`node --use-env-proxy scripts/dev-server.cjs`，访问 `http://localhost:8031/pantry.html`。该服务仅监听回环地址、仅提供页面及配置，并将 API 转发到本项目真实线上后端；录入会写入对应云端家庭。静态 `python3 -m http.server` 不支持真实识别。
+- 真实测试命令：`PLAYWRIGHT_MODULE=/path/to/playwright node scripts/test-photo-live.cjs /path/to/image`。该脚本会真实上传并在新测试家庭留下一件库存，应仅在明确需要实测时运行。
+- 发布前发现线上运行 `fix/pantry-availability-20261006` 的修复（`67a813c`），已确认该分支 HTML 与线上一致，并合并保留云端重试、全局错误提示和到期解析修复。合并后的浏览器局部回归及 `node --test scripts/test-intake.cjs` 7 项测试全部通过。
+- 生产实测可设置 `PANTRY_BASE_URL=https://pantry-mng.vercel.app` 运行真实测试脚本；仍会写入独立测试家庭。发布仅使用 Git 提交生成的文件包，不包含工作区其他未提交修改。
+- 适用范围与过时风险：以上描述对应本分支的单 HTML 页面实现；页面结构、存储流程或部署方式变化后需重新核对。无需服务端迁移；正式发布后刷新网页加载新前端。
+
+### 生产发布与验证
+
+- 发布时间/验证日期：2026-10-06（KST）。发布代码 commit：`15964b3`，分支 `codex/package-type-filter`，已推送 GitHub；未合并 main。
+- Vercel 生产部署：`dpl_4P8HYctfLXgMYemVRoJVRtmngnK1`，正式入口 `https://pantry-mng.vercel.app/pantry.html`。
+- 已执行：`vercel deploy --prod --yes`，随后在正式域名运行 `test-photo-live.cjs`。真实上传、模型返回、手动选旅行装、PUT 200、独立 GET 200、浏览器存储、刷新保留筛选及正装排除该条目均通过。浏览器无未捕获运行错误。
+- 正式 HTML 与发布文件 SHA-256 一致：`93e45147b160ff3850f1eb55a91475ea1dfd609c3ae8bcd435ac9b3887eb7839`。
+- 本次验证为 smoke + 相关功能回归 + 真实图片端到端测试，没有执行全部产品功能回归。没有数据库结构迁移；使用原有 JSON 字段保存。月份期限仍按已有规则转换为该月 1 日，非图片上明确标注的日。
+- 用户验收：刷新正式网页，拍照录入后手动选择包装类型；在物品库点击旅行装，再刷新，筛选应继续有效。旧物品可从详情补标签。
+- 发布从 Git archive 构建，未包含工作区 `.gitignore` 与 `growth_loop` 的未提交修改。上述部署状态仅代表验证时刻，之后可能被其他发布替换。

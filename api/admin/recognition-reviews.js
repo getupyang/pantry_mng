@@ -29,13 +29,36 @@ function extractModelText(modelResponse) {
   return text.length > 4000 ? `${text.slice(0, 4000)}...` : text;
 }
 
+export function normalizeReviewImages(value) {
+  let imageDataUrls = [];
+  if (typeof value === "string" && value.startsWith("data:image/")) {
+    imageDataUrls = [value];
+  } else if (typeof value === "string" && value) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        imageDataUrls = parsed.filter(
+          (url) => typeof url === "string" && url.startsWith("data:image/"),
+        );
+      }
+    } catch {
+      imageDataUrls = [];
+    }
+  }
+  return {
+    imageDataUrl: imageDataUrls[0] || null,
+    imageDataUrls,
+  };
+}
+
 function summarize(row) {
+  const reviewImages = normalizeReviewImages(row.image_data_url);
   return {
     id: row.id,
     familyId: row.family_id,
     clientId: row.client_id,
     reqType: row.req_type,
-    imageDataUrl: row.image_data_url,
+    ...reviewImages,
     models: row.models || [],
     modelText: extractModelText(row.model_response),
     usage: row.model_response?.usage || null,
