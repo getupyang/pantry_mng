@@ -373,6 +373,7 @@ input,textarea,.finput,.rate-inp{
 .finput{flex:1;border:none;background:transparent;font-size:var(--f-base);color:var(--text);outline:none;}
 .finput::placeholder{color:var(--muted);}
 .funit{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);}
+.funit-select{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:4px 6px;max-width:70px;margin-left:4px;}
 .frow.unc{background:rgba(138,94,20,.04);}
 .udot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;}
 .intake-row{align-items:flex-start;}
@@ -387,6 +388,9 @@ input,textarea,.finput,.rate-inp{
 .detected-badge{display:inline-flex;align-items:center;gap:5px;background:var(--green-l);border:1px solid var(--green-m);border-radius:7px;padding:4px 10px;font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--green);margin:0 13px 10px;letter-spacing:.04em;}
 
 .confirm-btn{width:100%;padding:13px;background:var(--text);color:#fff;border:none;border-radius:10px;font-size:var(--f-md);cursor:pointer;letter-spacing:.05em;}
+.d-sec-title-row{display:flex;align-items:center;justify-content:space-between;}
+.d-edit-btn{font-size:var(--f-xs);font-family:'DM Mono',monospace;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:99px;padding:3px 12px;cursor:pointer;letter-spacing:.06em;}
+.d-edit-btn:active{background:var(--surface2);}
 
 /* scan */
 .scan-ov{position:fixed;inset:0;z-index:200;background:#090909;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;opacity:0;pointer-events:none;transition:opacity .18s;}
@@ -656,7 +660,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
     <div class="tb-back" onclick="nav('scr-home')">
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M8.5 2L5 6.5L8.5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>返回
     </div>
-    <div class="tb-title">录入物品</div>
+    <div class="tb-title" id="add-title">录入物品</div>
     <div style="width:48px"></div>
   </div>
   <div class="scroll"><div class="add-wrap">
@@ -730,7 +734,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™" oninput="autoDetectRecognized(this.value)"></div>
       <div class="frow"><label class="flabel" for="fi-category">分类</label><select class="package-select" id="fi-category"></select></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
-      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><span class="funit" id="fi-unit">ml</span></div>
+      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><select class="funit-select" id="fi-unit" onchange="onUnitSelectChange('fi')"></select><input class="finput" id="fi-unit-custom" placeholder="单位" style="max-width:55px;display:none"></div>
       <div class="frow"><label class="flabel" for="fi-package-type">包装类型</label><select class="package-select" id="fi-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
@@ -747,7 +751,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><label class="flabel" for="mf-category">分类</label><select class="package-select" id="mf-category"></select></div>
       <div id="mf-detect-badge"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
-      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><span class="funit" id="mf-unit">ml</span></div>
+      <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><select class="funit-select" id="mf-unit" onchange="onUnitSelectChange('mf')"></select><input class="finput" id="mf-unit-custom" placeholder="单位" style="max-width:55px;display:none"></div>
       <div class="frow"><label class="flabel" for="mf-package-type">包装类型</label><select class="package-select" id="mf-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="mf-qty" value="1" style="max-width:45px"><span class="funit">件/包</span></div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
@@ -759,7 +763,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">保质期至</span><input class="finput" type="date" id="mf-exp"></div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="mf-location"><option value="">未填写</option></select></div>
     </div>
-    <button class="confirm-btn" onclick="confirmAdd()">确认录入 →</button>
+    <button class="confirm-btn" id="confirm-btn" onclick="confirmAdd()">确认录入 →</button>
   </div></div>
 </div>
 
@@ -1107,7 +1111,8 @@ const DETECT_MAP=[
   {kw:['护发精油','发油'],cat:'护发精油',shape:'generic',unit:'ml',daily:0.5,color:['#ead9ad','#aa7f28','#644812']},
   {kw:['护发素','发膜'],cat:'护发素',shape:'shampooBottle',unit:'ml',daily:4,color:['#d3d8ec','#6b78aa','#36436e']},
   {kw:['洗发','发水'],cat:'洗发水',shape:'shampooBottle',unit:'ml',daily:6,color:['#c0dce8','#3870a8','#144068']},
-  {kw:['粉底','气垫','妆前乳','隔离霜'],cat:'底妆',shape:'generic',unit:'ml',daily:0.3,color:['#ead4c3','#ad7650','#6c432d']},
+  {kw:['气垫'],cat:'气垫',shape:'generic',unit:'ml',daily:0.3,color:['#ead4c3','#ad7650','#6c432d'],substitutes:['粉底液']},
+  {kw:['粉底液','粉底','妆前乳','隔离霜'],cat:'粉底液',shape:'generic',unit:'ml',daily:0.3,color:['#ecd6c6','#b07d58','#6f4730'],substitutes:['气垫']},
   {kw:['修容','阴影粉'],cat:'修容',shape:'generic',unit:'g',daily:0.05,color:['#dfc8b8','#986b50','#5c3d2d']},
   {kw:['口红','唇膏','唇釉'],cat:'口红',shape:'generic',unit:'g',daily:0.05,color:['#edc3c8','#b94758','#762534']},
   {kw:['眼线笔','眼线液','眼线胶'],cat:'眼线笔',shape:'generic',unit:'支',daily:0.01,color:['#ced0d6','#525968','#282e38']},
@@ -1128,7 +1133,7 @@ const DETECT_MAP=[
 const ITEM_CATEGORIES=[
   '面膜','面霜','眼霜','水','乳液','精华','洁面','护手霜','身体乳','防晒','香水',
   '洗发水','护发精油','护发素',
-  '底妆','修容','口红','眼线笔','腮红','高光','假睫毛','散粉','定妆喷雾',
+  '气垫','粉底液','修容','口红','眼线笔','腮红','高光','假睫毛','散粉','定妆喷雾',
   '口腔','清洁','纸品','其他',
 ];
 
@@ -1136,7 +1141,7 @@ function detectItem(name){
   if(!name||name.length<2) return null;
   for(const rule of DETECT_MAP){
     if(rule.kw.some(k=>name.includes(k))){
-      return{cat:rule.cat,shape:rule.shape,unit:rule.unit,daily:rule.daily,color:rule.color};
+      return{cat:rule.cat,shape:rule.shape,unit:rule.unit,daily:rule.daily,color:rule.color,substitutes:rule.substitutes||[]};
     }
   }
   return null;
@@ -1154,6 +1159,47 @@ function populateCategorySelects(){
   });
 }
 
+// 单位：预设常见单位下拉 + 「其他」可手输。用户填的单位不再被规则覆盖。
+const UNIT_OPTIONS=['ml','g','个','抽','卷','片','支','对','喷','块','包','瓶','__other__'];
+const UNIT_OTHER='__other__';
+function unitOptionLabel(u){return u===UNIT_OTHER?'其他…':u;}
+function populateUnitSelects(){
+  const options=UNIT_OPTIONS.map(u=>`<option value="${u}">${unitOptionLabel(u)}</option>`).join('');
+  ['fi-unit','mf-unit'].forEach(id=>{
+    const select=document.getElementById(id);
+    if(select)select.innerHTML=options;
+  });
+}
+// 把一个单位值写进表单：命中预设则选预设；否则选「其他」并把值放进手输框
+function setFormUnit(prefix,unit){
+  const select=document.getElementById(`${prefix}-unit`);
+  const custom=document.getElementById(`${prefix}-unit-custom`);
+  if(!select)return;
+  const u=(unit||'').trim();
+  if(u&&!UNIT_OPTIONS.includes(u)){
+    select.value=UNIT_OTHER;
+    if(custom){custom.value=u;custom.style.display='';}
+  }else{
+    select.value=u||'ml';
+    if(custom){custom.value='';custom.style.display='none';}
+  }
+}
+function onUnitSelectChange(prefix){
+  const select=document.getElementById(`${prefix}-unit`);
+  const custom=document.getElementById(`${prefix}-unit-custom`);
+  if(!select||!custom)return;
+  if(select.value===UNIT_OTHER){custom.style.display='';custom.focus();}
+  else{custom.style.display='none';custom.value='';}
+}
+// 读表单最终单位：优先手输框（当选了「其他」），否则取下拉值
+function getFormUnit(prefix){
+  const select=document.getElementById(`${prefix}-unit`);
+  const custom=document.getElementById(`${prefix}-unit-custom`);
+  if(!select)return '';
+  if(select.value===UNIT_OTHER)return (custom?.value||'').trim();
+  return select.value;
+}
+
 function suggestCategory(name,selectId){
   const d=detectItem(name);
   const select=document.getElementById(selectId);
@@ -1165,10 +1211,9 @@ window.autoDetect=function(val){
   const d=suggestCategory(val,'mf-category');
   _lastDetected=d;
   const badge=document.getElementById('mf-detect-badge');
-  const unitEl=document.getElementById('mf-unit');
   if(d&&badge){
     badge.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${d.shape==='generic'?'通用':shapeName(d.shape)} · ${d.unit}/天 默认消耗 ${d.daily}</div>`;
-    if(unitEl) unitEl.textContent=d.unit;
+    setFormUnit('mf',d.unit);
   } else if(badge){
     badge.innerHTML='';
   }
@@ -1178,10 +1223,9 @@ window.autoDetectRecognized=function(val){
   const d=suggestCategory(val,'fi-category');
   _lastDetected=d;
   const badge=document.getElementById('detected-cat-badge');
-  const unitEl=document.getElementById('fi-unit');
   if(d&&badge){
     badge.innerHTML=`<div class="detected-badge">✦ 自动分类：${d.cat} · ${shapeName(d.shape)}</div>`;
-    if(unitEl)unitEl.textContent=d.unit;
+    setFormUnit('fi',d.unit);
   }else if(badge){
     badge.innerHTML='';
   }
@@ -2274,7 +2318,10 @@ function openDetail(id){
     <div class="d-row"><span class="d-row-label">距离到期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${expInfo.days<0?`已过期${Math.abs(expInfo.days)}天`:expInfo.days===0?'今天到期':`${expInfo.days}天后`}</span></div>
   </div>`:''}
   <div class="d-sec">
-    <div class="d-sec-title">物品信息</div>
+    <div class="d-sec-title d-sec-title-row">物品信息<button type="button" class="d-edit-btn" onclick="openEditItem('${item.id}')">编辑</button></div>
+    <div class="d-row"><span class="d-row-label">分类</span><span class="d-row-val">${item.cat||'其他'}</span></div>
+    <div class="d-row"><span class="d-row-label">品牌</span><span class="d-row-val">${item.brand||'—'}</span></div>
+    <div class="d-row"><span class="d-row-label">单件容量</span><span class="d-row-val">${item.packageSize} ${item.unit}</span></div>
     <div class="d-row"><span class="d-row-label">包装类型</span><button type="button" class="package-select" onclick="openPackageTypeSheet('${item.id}')">${packageTypeLabel(item.packageType)} · 修改</button></div>
     <div class="d-row">
       <span class="d-row-label">库存地点</span>
@@ -2906,8 +2953,7 @@ function resetRecognitionIntakeForm(){
     const element=document.getElementById(id);
     if(element)element.value=value;
   });
-  const unit=document.getElementById('fi-unit');
-  if(unit)unit.textContent='ml';
+  setFormUnit('fi','ml');
   const badge=document.getElementById('detected-cat-badge');
   if(badge)badge.replaceChildren();
   const heading=document.querySelector('#recog-result .form-hd-t');
@@ -3806,8 +3852,7 @@ function fillFormFields(result){
   }
   if(brandEl)brandEl.value=result.brand||'';
   if(sizeEl)sizeEl.value=result.packageSize||'';
-  const unitEl=document.getElementById('fi-unit');
-  if(unitEl)unitEl.textContent=result.unit||detectedFromName?.unit||'ml';
+  setFormUnit('fi',result.unit||detectedFromName?.unit||'ml');
   if(qtyEl)qtyEl.value=result.qty||1;
   if(expEl)expEl.value=result.expiryDate||'';
   const confEl=document.querySelector('#recog-result .form-conf');
@@ -3838,6 +3883,43 @@ function cancelScan(){
   }
 }
 
+let _editingItemId=null;
+// 打开「编辑已存物品」：复用手动录入表单，预填当前值，进入编辑模式
+function openEditItem(id){
+  const it=items.find(x=>x.id===id);
+  if(!it)return;
+  _editingItemId=id;
+  // 用手动表单
+  document.getElementById('recog-result').style.display='none';
+  document.getElementById('manual-form').style.display='block';
+  const setVal=(eid,v)=>{const el=document.getElementById(eid);if(el)el.value=v;};
+  setVal('mf-name',it.name||'');
+  setVal('mf-brand',it.brand||'');
+  setVal('mf-size',it.packageSize!=null?String(it.packageSize):'');
+  setFormUnit('mf',it.unit||'ml');
+  setVal('mf-category',ITEM_CATEGORIES.includes(it.cat)?it.cat:'其他');
+  setVal('mf-package-type',it.packageType||'');
+  setVal('mf-exp',it.expiryDate||'');
+  const badge=document.getElementById('mf-detect-badge');if(badge)badge.innerHTML='';
+  // 编辑时隐藏「购买数量/录入状态」这类只在首次录入才有意义的字段
+  toggleIntakeOnlyRows(false);
+  const btn=document.getElementById('confirm-btn');if(btn)btn.textContent='保存修改 →';
+  const title=document.getElementById('add-title');if(title)title.textContent='编辑物品';
+  nav('scr-add');
+}
+function exitEditMode(){
+  _editingItemId=null;
+  toggleIntakeOnlyRows(true);
+  const btn=document.getElementById('confirm-btn');if(btn)btn.textContent='确认录入 →';
+  const title=document.getElementById('add-title');if(title)title.textContent='录入物品';
+  clearIntakeForms();
+}
+// 编辑模式隐藏「购买数量」和「录入状态」两行（它们只在首次录入有意义）
+function toggleIntakeOnlyRows(show){
+  ['mf-qty','fi-qty'].forEach(id=>{const el=document.getElementById(id);if(el){const row=el.closest('.frow');if(row)row.style.display=show?'':'none';}});
+  document.querySelectorAll('.intake-row').forEach(row=>{row.style.display=show?'':'none';});
+}
+
 function confirmAdd(){
   const isManual=document.getElementById('manual-form').style.display!=='none';
   const packageSelect=document.getElementById(isManual?'mf-package-type':'fi-package-type');
@@ -3852,15 +3934,38 @@ function confirmAdd(){
   const name=isManual?document.getElementById('mf-name').value:document.getElementById('fi-name').value;
   const brand=isManual?document.getElementById('mf-brand').value:document.getElementById('fi-brand').value;
   const size=parseInt(isManual?document.getElementById('mf-size').value:document.getElementById('fi-size').value)||250;
-  const recognizedUnit=document.getElementById('fi-unit')?.textContent||'';
-  const manualUnit=document.getElementById('mf-unit')?.textContent||'';
-  const formUnit=normalizeRecognitionUnit(isManual?manualUnit:recognizedUnit);
+  const formUnit=normalizeRecognitionUnit(getFormUnit(isManual?'mf':'fi'));
   const qty=parseInt(isManual?document.getElementById('mf-qty').value:document.getElementById('fi-qty').value)||1;
   const exp=isManual?document.getElementById('mf-exp').value:document.getElementById('fi-exp').value;
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
   const addSource=isManual?'manual':(_currentRecognitionReviewType==='order'&&window._orderItems?'order':'photo');
+
+  // 编辑已存物品：只改基础字段，保留库存/开封/日志/用量等运行时状态
+  if(_editingItemId){
+    const it=items.find(x=>x.id===_editingItemId);
+    if(it){
+      const du=detectItem(name);
+      it.name=name||it.name;
+      it.brand=brand||'';
+      it.cat=finalCategory;
+      it.packageType=packageType;
+      it.packageSize=size;
+      it.unit=formUnit||it.unit;
+      it.expiryDate=exp||null;
+      if(du&&du.substitutes)it.substitutes=du.substitutes;
+      save();
+      trackEvent('item_edit',{itemId:it.id,cat:it.cat});
+      const editedId=_editingItemId;
+      exitEditMode();
+      nav('scr-home');
+      if(activeTab===0)renderDashboard();else renderGallery();
+      updateAlert();
+      openDetail(editedId);
+    }
+    return;
+  }
 
   const d=detectItem(name)||_lastDetected||{cat:'其他',shape:'generic',unit:'ml',daily:1,color:['#c8d8e8','#5878a0','#284060']};
   const finalUnit=formUnit||d.unit;
@@ -3914,16 +4019,30 @@ function confirmAdd(){
   updateAlert();
   document.getElementById('recog-result').style.display='none';
   document.getElementById('manual-form').style.display='block';
-  document.getElementById('mf-name').value='';
-  document.getElementById('mf-package-type').value='';
-  document.getElementById('fi-package-type').value='';
-  document.getElementById('mf-category').value='其他';
-  document.getElementById('fi-category').value='其他';
-  document.getElementById('mf-detect-badge').innerHTML='';
-  document.querySelector('input[name="mf-open-state"][value="stock"]').checked=true;
-  document.querySelector('input[name="fi-open-state"][value="stock"]').checked=true;
-  _lastDetected=null;
+  clearIntakeForms();
   resetRecognitionReviewState();
+}
+
+// 「开始下一件」时彻底清空录入表单所有手动字段，避免继承上一件的脏数据（品牌/容量/单位/日期/数量都要清）
+function clearIntakeForms(){
+  const setVal=(id,v='')=>{const el=document.getElementById(id);if(el)el.value=v;};
+  // 品名、品牌、容量、日期：清空
+  ['mf-name','mf-brand','mf-size','mf-exp','fi-name','fi-brand','fi-size','fi-exp'].forEach(id=>setVal(id));
+  // 数量回默认
+  setVal('mf-qty','1');setVal('fi-qty','2');
+  // 分类回「其他」
+  setVal('mf-category','其他');setVal('fi-category','其他');
+  // 包装类型回未选
+  setVal('mf-package-type','');setVal('fi-package-type','');
+  // 单位回默认 ml，并收起「其他」手输框
+  setFormUnit('mf','ml');setFormUnit('fi','ml');
+  // 清识别徽标
+  const mb=document.getElementById('mf-detect-badge');if(mb)mb.innerHTML='';
+  const fb=document.getElementById('detected-cat-badge');if(fb)fb.innerHTML='';
+  // 录入状态回「未开封入库」
+  const mo=document.querySelector('input[name="mf-open-state"][value="stock"]');if(mo)mo.checked=true;
+  const fo=document.querySelector('input[name="fi-open-state"][value="stock"]');if(fo)fo.checked=true;
+  _lastDetected=null;
 }
 
 // ═══════════════════════════════════════════════
@@ -3963,6 +4082,7 @@ function nav(id){
     clearPendingRecognitionReview();
     clearPendingPhotos();
     clearOrderRecognitionState();
+    if(_editingItemId)exitEditMode();
   }
   const c=document.getElementById(_curScr);
   const n=document.getElementById(id);
@@ -4069,6 +4189,7 @@ document.addEventListener('touchmove',e=>{
 // ═══════════════════════════════════════════════
 // 应用字号设置
 populateCategorySelects();
+populateUnitSelects();
 applyFontSize(loadFontSize());
 ensureExpiryInputsVisible();
 captureAttribution();
