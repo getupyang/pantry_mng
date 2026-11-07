@@ -508,6 +508,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
 .package-select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:7px;max-width:100%;min-width:0;}
 .package-filters{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 14px;border-bottom:1px solid var(--border);}
 .package-filter-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.filter-row+.filter-row{margin-top:10px;}
 .package-filter-options button,.package-empty button{font:inherit;font-size:var(--f-sm);padding:8px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;}
 .package-filter-options button[aria-pressed="true"]{background:var(--green-l);border-color:var(--green);color:var(--green);}
 .package-label{font-size:var(--f-sm);color:var(--muted);margin-top:5px;}
@@ -1267,6 +1268,21 @@ try{
 function setPackageFilter(value){
   packageFilter=validPackageType(value)?value:'all';
   try{localStorage.setItem(PACKAGE_FILTER_KEY,packageFilter);}catch{}
+  renderGallery();
+}
+
+// 排序模式：expiry=按到期(最快过期在前，默认)，added=按添加顺序。只影响分类组内顺序。
+const SORT_MODES={expiry:'到期顺序',added:'添加顺序'};
+const SORT_MODE_KEY='pantry_sort_mode';
+const validSortMode=value=>Object.prototype.hasOwnProperty.call(SORT_MODES,value);
+let sortMode='expiry';
+try{
+  const stored=localStorage.getItem(SORT_MODE_KEY);
+  if(validSortMode(stored))sortMode=stored;
+}catch{}
+function setSortMode(value){
+  sortMode=validSortMode(value)?value:'expiry';
+  try{localStorage.setItem(SORT_MODE_KEY,sortMode);}catch{}
   renderGallery();
 }
 function openPackageTypeSheet(itemId){
@@ -2053,8 +2069,19 @@ function renderDashboard(){
 // ═══════════════════════════════════════════════
 //  GALLERY
 // ═══════════════════════════════════════════════
+// 按到期日升序比较：最快到期排最前；无保质期(null/空/非法)排最后
+function compareByExpiry(a,b){
+  const ta=a&&a.expiryDate?Date.parse(a.expiryDate):NaN;
+  const tb=b&&b.expiryDate?Date.parse(b.expiryDate):NaN;
+  const va=Number.isNaN(ta)?Infinity:ta;
+  const vb=Number.isNaN(tb)?Infinity:tb;
+  return va-vb;
+}
+
 function renderGallery(){
-  const filterHTML=`<div class="package-filters"><div style="font-size:var(--f-sm);color:var(--muted)">包装类型</div><div class="package-filter-options" role="group" aria-label="按包装类型筛选">${Object.entries({all:'全部',...PACKAGE_TYPES}).map(([value,label])=>`<button type="button" aria-pressed="${packageFilter===value}" onclick="setPackageFilter('${value}')">${label}</button>`).join('')}</div></div>`;
+  const packageRow=`<div class="filter-row"><div style="font-size:var(--f-sm);color:var(--muted)">包装类型</div><div class="package-filter-options" role="group" aria-label="按包装类型筛选">${Object.entries({all:'全部',...PACKAGE_TYPES}).map(([value,label])=>`<button type="button" aria-pressed="${packageFilter===value}" onclick="setPackageFilter('${value}')">${label}</button>`).join('')}</div></div>`;
+  const sortRow=`<div class="filter-row"><div style="font-size:var(--f-sm);color:var(--muted)">排序</div><div class="package-filter-options" role="group" aria-label="分类内排序方式">${Object.entries(SORT_MODES).map(([value,label])=>`<button type="button" aria-pressed="${sortMode===value}" onclick="setSortMode('${value}')">${label}</button>`).join('')}</div></div>`;
+  const filterHTML=`<div class="package-filters">${packageRow}${sortRow}</div>`;
   if(items.length===0){
     document.getElementById('gallery-body').innerHTML=filterHTML+htmlEmptyIntakeBlock('gallery');
     return;
@@ -2068,6 +2095,8 @@ function renderGallery(){
   visibleItems.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
   let h=filterHTML;
   for(const[cat,list] of Object.entries(cats)){
+    // 同类内排序：到期模式下最快过期排最前(无保质期排最后)；添加模式保持录入顺序
+    if(sortMode==='expiry')list.sort(compareByExpiry);
     h+=`<div class="cat-label">${cat}</div><div class="gallery-grid">`;
     list.forEach(item=>{
       const{isLow,exp}=getStatus(item);
