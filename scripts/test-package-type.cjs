@@ -72,9 +72,12 @@ for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) 
     await page.locator('#fi-package-type').selectOption('regular');
     await page.getByRole('button',{name:'确认录入 →',exact:true}).click();
     assert.deepEqual(await page.evaluate(()=>items.slice(-2).map(x=>x.packageType)),['travel','regular']);
+    // Navigation animates both screens briefly; measure the settled home screen.
+    await page.waitForFunction(()=>document.querySelectorAll('.screen.active').length===1&&document.getElementById('scr-home').classList.contains('active'));
     for(const width of [320,390,1280]){
       await page.setViewportSize({width,height:844});
       await page.evaluate(()=>{switchTab(1);setPackageFilter('all');});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.package-filters button,.gcard')].every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})),'visible cards and filters fit viewport');
     }
     assert.deepEqual(errors,[],'no browser runtime errors');
