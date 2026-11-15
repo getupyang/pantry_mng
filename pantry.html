@@ -374,6 +374,22 @@ input,textarea,.finput,.rate-inp{
 .finput::placeholder{color:var(--muted);}
 .funit{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--muted);}
 .funit-select{font-size:var(--f-sm);font-family:'DM Mono',monospace;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:4px 6px;max-width:70px;margin-left:4px;}
+.expiry-fields{border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.expiry-fields-title{padding:10px 13px 0;font-size:var(--f-xs);color:var(--muted);}
+.expiry-fields .finput{min-width:0;width:100%;}
+.shelf-life-row .flabel{width:100px;letter-spacing:0;}
+.shelf-life-row .flabel small{display:block;font-size:var(--f-xs);font-weight:400;}
+.shelf-life-control{display:flex;align-items:center;gap:4px;flex:1;min-width:0;}
+.shelf-life-control .finput{width:0;}
+.shelf-life-control select{flex-shrink:0;min-width:56px;}
+.expiry-hint{padding:0 13px 10px;color:var(--muted);font-size:var(--f-xs);line-height:1.6;}
+.gcard-expiry{font-size:var(--f-xs);color:var(--muted);text-align:center;line-height:1.5;overflow-wrap:anywhere;}
+.gcard-expiry.urgent{color:var(--red);}
+.gcard-expiry.soon{color:var(--amber);}
+#d-expiry-section .d-row{gap:12px;align-items:flex-start;}
+#d-expiry-section .d-row-label{flex-shrink:0;}
+#d-expiry-section .d-row-val{min-width:0;text-align:right;overflow-wrap:anywhere;}
+#d-expiry-note{font-size:var(--f-sm);color:var(--muted);line-height:1.6;margin-top:6px;}
 .frow.unc{background:rgba(138,94,20,.04);}
 .udot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;}
 .intake-row{align-items:flex-start;}
@@ -738,13 +754,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><select class="funit-select" id="fi-unit" onchange="onUnitSelectChange('fi')"></select><input class="finput" id="fi-unit-custom" placeholder="单位" style="max-width:55px;display:none"></div>
       <div class="frow"><label class="flabel" for="fi-package-type">包装类型</label><select class="package-select" id="fi-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="fi-qty" value="2" style="max-width:45px"><span class="funit">件</span></div>
+      <div class="expiry-fields">
+      <div class="expiry-fields-title">保质期与开封</div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
           <label class="intake-option"><input type="radio" name="fi-open-state" value="stock" checked><span>未开封入库</span></label>
           <label class="intake-option"><input type="radio" name="fi-open-state" value="open"><span>已开封使用</span></label>
         </div>
       </div>
-      <div class="frow unc"><div class="udot"></div><span class="flabel" style="color:var(--amber)">保质期至</span><input class="finput" id="fi-exp" value="2026-09-01" type="date"></div>
+      <div class="frow"><label class="flabel" for="fi-exp">包装到期日</label><input class="finput" id="fi-exp" type="date"></div>
+      <div class="frow shelf-life-row"><label class="flabel" for="fi-open-life">开封后保质期<small>选填</small></label><div class="shelf-life-control"><input class="finput" id="fi-open-life" type="number" min="1" step="1" inputmode="numeric" placeholder="未填写" aria-describedby="fi-life-hint"><select class="funit-select" id="fi-open-life-unit" aria-label="开封后保质期单位"><option value="month">月</option><option value="day">天</option><option value="year">年</option></select></div></div>
+      <div class="expiry-hint" id="fi-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封录入按今天起算。</div>
+      </div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="fi-location"><option value="">未填写</option></select></div>
     </div>
     <div class="form-card" id="manual-form">
@@ -755,13 +776,18 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="mf-size" placeholder="250" style="max-width:65px"><select class="funit-select" id="mf-unit" onchange="onUnitSelectChange('mf')"></select><input class="finput" id="mf-unit-custom" placeholder="单位" style="max-width:55px;display:none"></div>
       <div class="frow"><label class="flabel" for="mf-package-type">包装类型</label><select class="package-select" id="mf-package-type" required><option value="">请选择</option><option value="travel">旅行装</option><option value="regular">正装</option><option value="refill">补充装</option></select></div>
       <div class="frow"><span class="flabel">购买数量</span><input class="finput" id="mf-qty" value="1" style="max-width:45px"><span class="funit">件/包</span></div>
+      <div class="expiry-fields">
+      <div class="expiry-fields-title">保质期与开封</div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
           <label class="intake-option"><input type="radio" name="mf-open-state" value="stock" checked><span>未开封入库</span></label>
           <label class="intake-option"><input type="radio" name="mf-open-state" value="open"><span>已开封使用</span></label>
         </div>
       </div>
-      <div class="frow"><span class="flabel">保质期至</span><input class="finput" type="date" id="mf-exp"></div>
+      <div class="frow"><label class="flabel" for="mf-exp">包装到期日</label><input class="finput" type="date" id="mf-exp"></div>
+      <div class="frow shelf-life-row"><label class="flabel" for="mf-open-life">开封后保质期<small>选填</small></label><div class="shelf-life-control"><input class="finput" id="mf-open-life" type="number" min="1" step="1" inputmode="numeric" placeholder="未填写" aria-describedby="mf-life-hint"><select class="funit-select" id="mf-open-life-unit" aria-label="开封后保质期单位"><option value="month">月</option><option value="day">天</option><option value="year">年</option></select></div></div>
+      <div class="expiry-hint" id="mf-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封录入按今天起算。</div>
+      </div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="mf-location"><option value="">未填写</option></select></div>
     </div>
     <button class="confirm-btn" id="confirm-btn" onclick="confirmAdd()">确认录入 →</button>
@@ -1844,9 +1870,10 @@ function ensureOpenState(item){
     item.openItems=Array.from({length:count},()=>initPct);
   }
   item.openCount=item.openItems.length;
-  if(!Array.isArray(item.openedDates))item.openedDates=[];
-  const fallbackDate=item.openedDate||null;
-  item.openedDates=item.openItems.map((_,idx)=>item.openedDates[idx]||fallbackDate);
+  const hasPerPieceDates=Array.isArray(item.openedDates);
+  const previousDates=hasPerPieceDates?item.openedDates:[];
+  const fallbackDate=hasPerPieceDates?null:(item.openedDate||null);
+  item.openedDates=item.openItems.map((_,idx)=>previousDates[idx]||fallbackDate);
   item.openedDate=item.openedDates.find(Boolean)||null;
   return item.openItems;
 }
@@ -1875,26 +1902,80 @@ const getActivePercent=item=>{
   return item.activePercent||0;
 };
 function getDays(item){if(!item.dailyUse)return null;return Math.round(getTotal(item)/item.dailyUse);}
+// Date-only arithmetic: local calendar date in, whole-day ordinal out (no DST drift).
+function dateOrdinal(value){
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
+  const stamp=Date.parse(value+'T00:00:00Z');
+  if(!Number.isFinite(stamp)||new Date(stamp).toISOString().slice(0,10)!==value)return null;
+  return stamp/86400000;
+}
+function getExpirySummary(item,index=null){
+  const empty={date:null,source:null,missingOpenedDate:false,openIndex:null};
+  if(!item)return empty;
+  const openItems=ensureOpenState(item);
+  const packageDay=dateOrdinal(item.expiryDate);
+  const shelfLife=normalizeOpenedShelfLife(item.openedShelfLife);
+  const duration=shelfLife?shelfLife.value*({day:1,month:30,year:365}[shelfLife.unit]):null;
+  const packageInfo={...empty,date:packageDay===null?null:item.expiryDate,source:packageDay===null?null:'package'};
+  function forPiece(i){
+    if(!(openItems[i]>0))return {...empty};
+    const openedDay=dateOrdinal(item.openedDates[i]);
+    const info={...packageInfo,openIndex:i,missingOpenedDate:duration!==null&&openedDay===null};
+    if(duration!==null&&openedDay!==null){
+      const end=openedDay+duration;
+      if(packageDay===null||end<packageDay){
+        const date=new Date(end*86400000).toISOString().slice(0,10);
+        if(dateOrdinal(date)!==null)return {...info,date,source:'opened'};
+      }
+    }
+    return info;
+  }
+  if(index!==null)return forPiece(index);
+  const candidates=openItems.map((_,i)=>forPiece(i));
+  if(item.stockCount>0||item.supplement?.stockCount>0)candidates.push(packageInfo);
+  const dated=candidates.filter(info=>info.date).sort((a,b)=>a.date.localeCompare(b.date));
+  return {...(dated[0]||empty),missingOpenedDate:candidates.some(info=>info.missingOpenedDate)};
+}
 function getStatus(item){
   // 计算总余量（含库存）占单件规格的百分比
   const totalRemain=getTotal(item); // 总余量 = 使用区总余量 + 库存货架 + 补充装
   const totalPercent=(totalRemain/item.packageSize)*100; // 总余量占单件规格的百分比
   const isLow=totalPercent<20; // 如果低于20%，需要补货
-  let exp='ok';
-  if(item.expiryDate){const d=(new Date(item.expiryDate)-new Date())/86400000;if(d<30)exp='urgent';else if(d<90)exp='soon';}
-  return{isLow,exp};
+  return{isLow,exp:getExpInfo(item)?.cls||'ok'};
 }
-function getExpInfo(item){
-  if(!item.expiryDate)return null;
-  const d=Math.round((new Date(item.expiryDate)-new Date())/86400000);
-  if(d<0)return{days:d,cls:'urgent'}; // 负数表示已过期
-  if(d<30)return{days:d,cls:'urgent'};
-  if(d<90)return{days:d,cls:'soon'};
-  return{days:d,cls:'ok'};
+function getExpInfo(item,index=null,asOf=today()){
+  const info=getExpirySummary(item,index);
+  const currentDay=dateOrdinal(asOf);
+  if(!info.date||currentDay===null)return null;
+  const days=dateOrdinal(info.date)-currentDay;
+  return {...info,days,cls:days<30?'urgent':days<90?'soon':'ok'};
+}
+function expiryCountdown(info){return !info?'到期时间未知':info.days<0?`已过期 ${Math.abs(info.days)} 天`:info.days===0?'今天到期':`距到期 ${info.days} 天`;}
+function expirySource(info){return info?.source==='opened'?'开封期限':'包装期限';}
+function shelfLifeLabel(value){const life=normalizeOpenedShelfLife(value);return life?`${life.value} ${{day:'天',month:'月',year:'年'}[life.unit]}`:'未填写';}
+function renderExpiryDetails(item,index=null){
+  const opened=index!==null;
+  const empty=opened&&!(item.openItems[index]>0);
+  const info=getExpInfo(item,index);
+  const summary=getExpirySummary(item,index);
+  const date=opened&&dateOrdinal(item.openedDates[index])!==null?item.openedDates[index]:null;
+  const color=info?.cls==='urgent'?' red':info?.cls==='soon'?' amber':'';
+  const row=(label,value,id='',cls='')=>`<div class="d-row"><span class="d-row-label">${label}</span><span class="d-row-val${cls}"${id?` id="${id}"`:''}>${value}</span></div>`;
+  let note=summary.missingOpenedDate?'开封日期未记录，暂无法计算开封期限。'+(info?'当前暂按包装到期日显示。':''):'';
+  if(!opened&&normalizeOpenedShelfLife(item.openedShelfLife))note='点击「开封使用」后，按当天开始计算开封期限。';
+  return `<div class="d-sec-title">${opened?'当前件 · 保质期与开封':'保质期与开封'}</div>`+
+    row('当前状态',empty?'已用完':opened?'使用中':'未开封')+
+    (opened?row('开封日期',date||'未记录'):'')+
+    row('包装到期日',dateOrdinal(item.expiryDate)!==null?item.expiryDate:'未填写')+
+    row('开封后保质期',shelfLifeLabel(item.openedShelfLife))+
+    row(opened?'当前件到期日':'到期日期',info?.date||'—','d-expiry-date',color)+
+    row('距离到期',empty?'已用完，不参与到期提醒':expiryCountdown(info),'d-expiry-countdown',color)+
+    (info?row('计算依据',expirySource(info),'d-expiry-source'):'')+
+    `<div id="d-expiry-note">${note}</div>`;
 }
 function capStr(item){return `${getRemain(item)}/${item.packageSize}${item.unit}`;}
 function statusColor(item){const{isLow,exp}=getStatus(item);return isLow||exp==='urgent'?'var(--red)':exp==='soon'?'var(--amber)':'var(--green)';}
-function today(){return new Date().toISOString().slice(0,10);}
+function today(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;}
 function addLog(item,type,desc,delta){item.logs.push({type,desc,delta,date:today()});}
 
 // ═══════════════════════════════════════════════
@@ -2025,7 +2106,8 @@ function renderDashboard(){
     urgentItems.forEach(item=>{
       const{isLow,exp}=getStatus(item);
       const tag=isLow?'<span class="alert-item-tag red">补货</span>':'<span class="alert-item-tag amber">到期</span>';
-      const reason=isLow?`余量 ${capStr(item)}，库存 0`:`保质期 ${item.expiryDate}`;
+      const expiry=getExpInfo(item);
+      const reason=isLow?`余量 ${capStr(item)}，库存 0`:`${expiryCountdown(expiry)} · ${expiry?.date||''} · ${expirySource(expiry)}`;
       h+=`<div class="alert-item" onclick="openDetail('${item.id}')">
         <div class="alert-item-icon">${getSVG(item,36,48)}</div>
         <div class="alert-item-info">
@@ -2071,11 +2153,11 @@ function renderDashboard(){
 // ═══════════════════════════════════════════════
 // 按到期日升序比较：最快到期排最前；无保质期(null/空/非法)排最后
 function compareByExpiry(a,b){
-  const ta=a&&a.expiryDate?Date.parse(a.expiryDate):NaN;
-  const tb=b&&b.expiryDate?Date.parse(b.expiryDate):NaN;
-  const va=Number.isNaN(ta)?Infinity:ta;
-  const vb=Number.isNaN(tb)?Infinity:tb;
-  return va-vb;
+  const da=dateOrdinal(getExpirySummary(a).date);
+  const db=dateOrdinal(getExpirySummary(b).date);
+  const va=da===null?Infinity:da;
+  const vb=db===null?Infinity:db;
+  return va===vb?0:va-vb;
 }
 
 function renderGallery(){
@@ -2124,11 +2206,19 @@ function renderGallery(){
           ${getSVG({...item,activePercent:avgPct},64,106)}${pip}
         </div>
         <div class="gcard-cap${isLow?' low':isEmpty?' empty':''}">${opened?(isEmpty?'已用完':capStr(item)):`库存 ${item.stockCount}件`}</div>
+        ${renderExpiryCard(item)}
       </div>`;
     });
     h+='</div>';
   }
   document.getElementById('gallery-body').innerHTML=h;
+}
+
+function renderExpiryCard(item){
+  const info=getExpInfo(item);
+  const unknown=getExpirySummary(item).missingOpenedDate;
+  if(!info&&!unknown)return '';
+  return `<div class="gcard-expiry ${info?.cls||''}">${info?`${expiryCountdown(info)}<br>${expirySource(info)}`:'开封日期待补充'}${info&&unknown?'<br>部分开封日期未记录':''}</div>`;
 }
 
 // ═══════════════════════════════════════════════
@@ -2142,7 +2232,7 @@ function setupDrag(el,id,isDetail,openIndex=0){
   const item=items.find(i=>i.id===id);if(!item)return;
   if(!hasOpenItems(item))return;
   let down=false,dragging=false,sy=0,sx=0,sv=0;
-  let framePending=false,lastDy=0;
+  let frameId=null,lastDy=0;
   const gY=e=>e.touches?e.touches[0].clientY:e.clientY;
   const gX=e=>e.touches?e.touches[0].clientX:e.clientX;
 
@@ -2166,46 +2256,44 @@ function setupDrag(el,id,isDetail,openIndex=0){
   el.addEventListener('mousedown',onDown);
   el.addEventListener('touchstart',onDown,{passive:true});
 
+  const applyDrag=()=>{
+    frameId=null;
+    const localDy=lastDy;
+    const newPct=Math.round(Math.max(0,Math.min(100,sv+localDy/82*100)));
+
+    if(isDetail){
+      // 详情页：只更新选中单件的百分比，不影响其他件
+      const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
+      // 确保索引在有效范围内，只更新这一个索引的值
+      const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
+      item.openItems[safeIdx]=newPct;
+      // 更新SVG显示（只显示当前选中单件的百分比）
+      updateSVGLevel({...item,activePercent:newPct},isDetail);
+      // 轻量更新详情页数字，避免整页重绘
+      const vEl=document.getElementById('d-v');
+      const pctEl=document.getElementById('d-pct');
+      if(vEl&&pctEl){
+        const val=newPct===0?'空':+(item.packageSize*newPct/100).toFixed(1);
+        vEl.textContent=val;
+        pctEl.textContent=newPct+'%';
+      }
+    }else{
+      // 画廊页：更新平均百分比（向后兼容）
+      if(item.openItems&&item.openItems.length) item.openItems=item.openItems.map(()=>newPct);
+      item.activePercent=newPct;
+      updateSVGLevel(item,isDetail);
+      refreshGCard(item);
+      updateAlert();
+    }
+  };
   // ── pointer move ──
   const onMove=e=>{
     if(!down)return;
     const dy=sy-gY(e);
-    const dx=gX(e)-sx;
     if(!dragging&&Math.abs(dy)<DRAG_THRESHOLD)return;
     dragging=true;
     lastDy=dy;
-    if(framePending)return;
-    framePending=true;
-    requestAnimationFrame(()=>{
-      framePending=false;
-      const localDy=lastDy;
-      const newPct=Math.round(Math.max(0,Math.min(100,sv+localDy/82*100)));
-      
-      if(isDetail){
-        // 详情页：只更新选中单件的百分比，不影响其他件
-        const idx=openIndex!==undefined?openIndex:(selectedOpenIndex[id]||0);
-        // 确保索引在有效范围内，只更新这一个索引的值
-        const safeIdx=Math.max(0,Math.min(idx,item.openItems.length-1));
-        item.openItems[safeIdx]=newPct;
-        // 更新SVG显示（只显示当前选中单件的百分比）
-        updateSVGLevel({...item,activePercent:newPct},isDetail);
-        // 轻量更新详情页数字，避免整页重绘
-        const vEl=document.getElementById('d-v');
-        const pctEl=document.getElementById('d-pct');
-        if(vEl&&pctEl){
-          const val=newPct===0?'空':+(item.packageSize*newPct/100).toFixed(1);
-          vEl.textContent=val;
-          pctEl.textContent=newPct+'%';
-        }
-      }else{
-        // 画廊页：更新平均百分比（向后兼容）
-        if(item.openItems&&item.openItems.length) item.openItems=item.openItems.map(()=>newPct);
-        item.activePercent=newPct;
-        updateSVGLevel(item,isDetail);
-        refreshGCard(item);
-        updateAlert();
-      }
-    });
+    if(frameId===null)frameId=requestAnimationFrame(applyDrag);
   };
   document.addEventListener('mousemove',onMove);
   el.addEventListener('touchmove',e=>{
@@ -2223,8 +2311,11 @@ function setupDrag(el,id,isDetail,openIndex=0){
   const onUp=e=>{
     if(!down)return;
     if(dragging){
+      if(frameId!==null){cancelAnimationFrame(frameId);applyDrag();}
       el.addEventListener('click',stopClick,{once:true,capture:true});
       save();
+      if(isDetail)refreshDetailPage(item.id);else renderGallery();
+      updateAlert();
     }
     down=false;dragging=false;
   };
@@ -2236,6 +2327,10 @@ function setupDrag(el,id,isDetail,openIndex=0){
 function refreshGCard(item){
   const card=document.getElementById('illus-'+item.id)?.closest('.gcard');
   if(!card)return;
+  const oldExpiry=card.querySelector('.gcard-expiry');
+  const expiryHTML=renderExpiryCard(item);
+  if(oldExpiry)oldExpiry.outerHTML=expiryHTML;
+  else if(expiryHTML)card.insertAdjacentHTML('beforeend',expiryHTML);
   const re=card.querySelector('.gcard-cap');
   if(re){
     const{isLow}=getStatus(item);
@@ -2264,10 +2359,8 @@ function openDetail(id){
   
   document.getElementById('d-title').textContent=item.name;
   const{isLow,exp}=getStatus(item);
-  const expInfo=getExpInfo(item);
   const days=opened?getDays(item):null;
   const isEmpty=opened&&getRemain(item)===0;
-  const currentOpenedDate=opened?(item.openedDates?.[currentIndex]||item.openedDate||null):null;
   const openActionHTML=opened
     ? `${currentPct===100?`<button class="d-act-btn" onclick="openPutBack('${item.id}')">放回库存</button>`:`<button class="d-act-btn danger" onclick="openRemoveCurrent('${item.id}')">${currentPct===0?'移除空件':'移除这件'}</button>`}
        ${item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">${isEmpty?'取出新件 →':'再开一件'}</button>`:''}`
@@ -2321,11 +2414,7 @@ function openDetail(id){
 </div>
 
   </div>
-  <div class="d-sec">
-    <div class="d-sec-title">开封记录</div>
-    <div class="d-row"><span class="d-row-label">当前状态</span><span class="d-row-val ${opened?'green':''}">${opened?'使用中':'未开封'}</span></div>
-    <div class="d-row"><span class="d-row-label">${opened?'当前件开封':'首次开封'}</span><span class="d-row-val">${opened?(currentOpenedDate||'未记录'):'—'}</span></div>
-  </div>
+  <div class="d-sec" id="d-expiry-section">${renderExpiryDetails(item,opened?currentIndex:null)}</div>
   <div class="d-sec">
     <div class="d-sec-title">库存货架（${item.stockCount}件未开封）</div>
     <div class="shelf">${shelfHTML}</div>
@@ -2341,11 +2430,6 @@ function openDetail(id){
     <div class="d-row"><span class="d-row-label">总余量（含库存）</span><span class="d-row-val" id="d-tot">${getTotal(item)} ${item.unit}</span></div>
     <div class="d-row"><span class="d-row-label">预计用完</span><span class="d-row-val${days&&days<14?' red':days&&days<30?' amber':''}" id="d-days">${days?`约 ${days} 天后`:'—'}</span></div>
   </div>
-  ${expInfo?`<div class="d-sec">
-    <div class="d-sec-title">保质期</div>
-    <div class="d-row"><span class="d-row-label">到期日期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${item.expiryDate}</span></div>
-    <div class="d-row"><span class="d-row-label">距离到期</span><span class="d-row-val${expInfo.cls==='urgent'?' red':expInfo.cls==='soon'?' amber':''}">${expInfo.days<0?`已过期${Math.abs(expInfo.days)}天`:expInfo.days===0?'今天到期':`${expInfo.days}天后`}</span></div>
-  </div>`:''}
   <div class="d-sec">
     <div class="d-sec-title d-sec-title-row">物品信息<button type="button" class="d-edit-btn" onclick="openEditItem('${item.id}')">编辑</button></div>
     <div class="d-row"><span class="d-row-label">分类</span><span class="d-row-val">${item.cat||'其他'}</span></div>
@@ -2411,6 +2495,8 @@ function refreshDetailPage(itemId){
 
 function refreshDStats(item){
   ensureOpenState(item);
+  const expirySection=document.getElementById('d-expiry-section');
+  if(expirySection)expirySection.innerHTML=renderExpiryDetails(item,item.openItems.length?(selectedOpenIndex[item.id]||0):null);
   if(!item.openItems.length){
     const el=document.getElementById('d-v');
     if(el){
@@ -2461,6 +2547,8 @@ function closeSheet(){
 window.openTake=function(itemId){
   const item=items.find(i=>i.id===itemId);if(!item||item.stockCount===0){closeSheet();return;}
   const alreadyOpened=hasOpenItems(item);
+  const openingPreview=getExpInfo({...item,openItems:[100],openCount:1,openedDates:[today()]},0);
+  const shelfLife=normalizeOpenedShelfLife(item.openedShelfLife);
   const body=`
     <div class="qty-row"><span class="qty-label">取出数量</span>
       <div class="qty-spin">
@@ -2472,6 +2560,7 @@ window.openTake=function(itemId){
     </div>
     <div style="font-size:var(--f-base);color:var(--text2);line-height:1.8">
       ${alreadyOpened?'取出后加入「使用区」。':'开封后加入「使用区」，并记录今天为首次开封日。'}<br>
+      ${shelfLife?`开封后保质期 ${shelfLifeLabel(shelfLife)}。${openingPreview?`本次开封到期日 ${openingPreview.date}（${expirySource(openingPreview)}）。`:''}<br>`:''}
       当前已开 <b>${item.openCount}</b> 件。<br>
       取后库存：<span id="tk-aft-s" style="font-family:'DM Mono',monospace">${item.stockCount-1} 件</span> ·
       使用区：<span id="tk-aft-o" style="font-family:'DM Mono',monospace">${item.openCount+1} 件</span>
@@ -3140,7 +3229,9 @@ function compareRecognitionValue(value){
 function getRecognitionChangedFields(parsed,accepted){
   if(!parsed||!accepted)return [];
   const fields=['name','brand','packageSize','unit','qty','expiryDate'];
-  return fields.filter(field=>compareRecognitionValue(parsed[field])!==compareRecognitionValue(accepted[field]));
+  const changed=fields.filter(field=>compareRecognitionValue(parsed[field])!==compareRecognitionValue(accepted[field]));
+  if(JSON.stringify(normalizeOpenedShelfLife(parsed.openedShelfLife))!==JSON.stringify(normalizeOpenedShelfLife(accepted.openedShelfLife)))changed.push('openedShelfLife');
+  return changed;
 }
 
 function getCurrentParsedRecognitionItem(source){
@@ -3362,6 +3453,44 @@ function normalizeRecognitionUnit(unit){
   return map[raw]||raw.toLowerCase();
 }
 
+function normalizeOpenedShelfLife(raw){
+  if(!raw||typeof raw!=='object'||!['number','string'].includes(typeof raw.value))return null;
+  const value=Number(raw.value);
+  const units={day:'day',days:'day',天:'day',日:'day',month:'month',months:'month',月:'month',个月:'month',year:'year',years:'year',年:'year'};
+  const key=String(raw.unit||'').toLowerCase();
+  const unit=Object.prototype.hasOwnProperty.call(units,key)?units[key]:null;
+  if(!unit||!Number.isSafeInteger(value)||value<=0||value*({day:1,month:30,year:365}[unit])>36500)return null;
+  return {value,unit};
+}
+
+function openingEvidenceMatches(raw,evidence){
+  const life=normalizeOpenedShelfLife(raw);
+  if(!life)return false;
+  const numberValue=text=>{
+    if(/^\d+(?:\.\d+)?$/.test(text))return Number(text);
+    const digits={一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+    if(text==='十')return 10;
+    if(text.includes('十')){const [tens,ones]=text.split('十');return (digits[tens]||1)*10+(digits[ones]||0);}
+    return digits[text]||0;
+  };
+  // Keep opening and unopened instructions in separate clauses. Never infer a
+  // duration from a generic instruction ("开封后请冷藏") or unrelated shelf life.
+  const clauses=String(evidence||'').replace(/(?:未开封|unopened|before\s+opening)[^，,;；。\n]*/gi,'').split(/[;；。\n]|\.(?!\d)/);
+  const candidates=[];
+  for(const clause of clauses){
+    if(/未开封|unopened|before\s+opening/i.test(clause))continue;
+    if(/开封后|开盖后|启封后|开启后|打开后|after\s+opening|once\s+opened/i.test(clause)){
+      for(const match of clause.matchAll(/(\d+(?:\.\d+)?|[一二两三四五六七八九十]+)\s*(个月|月|天|日|年|days?\b|months?\b|years?\b)/gi)){
+        candidates.push(normalizeOpenedShelfLife({value:numberValue(match[1]),unit:match[2]}));
+      }
+    }
+    if(/开盖罐|\bPAO\b|^\s*\d+\s*M\s*$/i.test(clause)){
+      for(const match of clause.matchAll(/(\d+)\s*M\b/gi))candidates.push(normalizeOpenedShelfLife({value:match[1],unit:'month'}));
+    }
+  }
+  return candidates.length>0&&candidates.every(candidate=>candidate&&candidate.value===life.value&&candidate.unit===life.unit);
+}
+
 function postProcessRecognitionResult(result){
   const parsed=result&&typeof result==='object'?result:{};
   const hasSameProduct=Object.prototype.hasOwnProperty.call(parsed,'sameProduct');
@@ -3378,6 +3507,8 @@ function postProcessRecognitionResult(result){
   parsed.packageSize=parseFloat(parsed.packageSize)||0;
   parsed.unit=normalizeRecognitionUnit(parsed.unit);
   parsed.qty=Math.max(1,parseInt(parsed.qty,10)||1);
+  parsed.openedShelfLifeEvidence=String(parsed.openedShelfLifeEvidence||'').trim().slice(0,500);
+  parsed.openedShelfLife=openingEvidenceMatches(parsed.openedShelfLife,parsed.openedShelfLifeEvidence)?normalizeOpenedShelfLife(parsed.openedShelfLife):null;
 
   const evidence=String(parsed.expiryEvidence||'');
   const explicitExpiry=/\b(?:EXP(?:IRY|IRATION)?|BEST\s+BEFORE|USE\s+BY)\b|有效期至|限期使用日期|使用期限|到期日期/i.test(evidence);
@@ -3538,6 +3669,8 @@ async function recognizePhoto(imageFiles,options={}){
   "qty": 1,
   "expiryDate": "2026-12-31",
   "expiryEvidence": "包装上的日期原文",
+  "openedShelfLife": null,
+  "openedShelfLifeEvidence": "",
   "missingFields": ["expiryDate"]
 }
 
@@ -3550,6 +3683,8 @@ async function recognizePhoto(imageFiles,options={}){
 6. unit（单位）：提取容量单位，如 "ml"、"g"、"个"、"抽"、"卷"、"件" 等
 7. qty（购买数量）：如果图片是特写镜头（只拍一个商品），默认为 1；如果图片是说明书特写（为了看清保质期），默认为 1；如果图片中明确显示多个商品/盒子，则识别实际数量；如果无法确定，默认为 1
 8. expiryDate（保质期）：从图片中提取保质期到期日期，格式必须是 YYYY-MM-DD（如 2028-03-01）。年份识别非常重要，请仔细识别图片中的年份数字。如果图片显示"28年"、"2028年"，必须识别为 2028（不是2026！）。如果只显示两位数年份（如"28"），在当前年份基础上判断：如果小于等于当前年份后两位，加2000；否则加2000（如当前是2026年，"28"识别为2028年）。月份识别：1-12月，保持原样。日期识别：如果图片显示完整日期（如"2028年3月15日"），使用该日期；如果只显示年月（如"28年3月"、"2028年3月"），使用该月第一天（如"2028-03-01"）；如果只显示年份（如"2028年"），使用该年第一天（如"2028-01-01"）。如果图片同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回。如果图片中没有保质期相关信息或完全无法识别，返回 null
+
+9. openedShelfLife（开封后保质期）：只提取包装明确标注的开封后时长或开盖罐 PAO 标志（如 6M、12M）。返回 {"value":6,"unit":"month"}，unit 只能是 day/month/year；保留原标注单位。openedShelfLifeEvidence 返回对应原文（PAO 说明标志和数字）。无明确依据时两字段分别返回 null 和空字符串。不要把未开封保质期、生产日期或包装到期日当作开封期限，不要根据品类猜测。开封后时长不能用于生成 expiryDate，也不要推测物品已开封或开封日期。
 
 重要：
 - 只返回 JSON 对象，不要包含 markdown 代码块标记（三个反引号加json等）
@@ -3623,6 +3758,8 @@ async function recognizeOrder(imageFile,options={}){
     "qty": 1,
     "expiryDate": "2026-12-31",
     "expiryEvidence": "包装上的日期原文",
+    "openedShelfLife": null,
+    "openedShelfLifeEvidence": "",
     "missingFields": ["expiryDate"]
   }
 ]
@@ -3633,7 +3770,8 @@ async function recognizeOrder(imageFile,options={}){
 3. 如果某个字段无法识别，使用空字符串、0 或 null，并写入 missingFields，不要编造
 4. 如果图片中同时给出了生产日期和保质期（月/年数），必须先根据生产日期和保质期计算得到到期日期，并将该到期日期作为 expiryDate 返回
 5. 如果只看到月份，例如 EXP 10/2028，expiryDate 取当月第一天：2028-10-01
-6. 只返回 JSON 数组，不要其他文字`;
+6. openedShelfLife 仅当截图明确注明开封后时长时返回 {"value":6,"unit":"month"}（unit 为 day/month/year，保留原单位）；openedShelfLifeEvidence 返回对应原文。无明确开封说明则分别返回 null 和空字符串，不按品类猜测，不与普通保质期混淆，不推测实际开封状态和日期。开封时长不能用来生成 expiryDate。
+7. 只返回 JSON 数组，不要其他文字`;
   const controller=options.controller||new AbortController();
   const timeoutMs=OPENROUTER_CONFIG.timeout*2;
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -3865,6 +4003,11 @@ function fillOrderRecognitionResult(item,totalCount){
 }
 
 // 填充表单字段（通用函数）
+function setFormShelfLife(prefix,value){
+  const life=normalizeOpenedShelfLife(value);
+  document.getElementById(`${prefix}-open-life`).value=life?.value??'';
+  document.getElementById(`${prefix}-open-life-unit`).value=life?.unit||'month';
+}
 function fillFormFields(result){
   // 包装类型始终由用户填写，每件订单商品独立选择。
   document.getElementById('fi-package-type').value='';
@@ -3884,6 +4027,10 @@ function fillFormFields(result){
   setFormUnit('fi',result.unit||detectedFromName?.unit||'ml');
   if(qtyEl)qtyEl.value=result.qty||1;
   if(expEl)expEl.value=result.expiryDate||'';
+  setFormShelfLife('fi',result.openedShelfLife);
+  // 每件识别结果独立确认，尤其不能把上一件的已开封状态带给下一件。
+  const stockOption=document.querySelector('input[name="fi-open-state"][value="stock"]');
+  if(stockOption)stockOption.checked=true;
   const confEl=document.querySelector('#recog-result .form-conf');
   if(confEl){
     const missing=(result.missingFields||[]).filter(f=>['name','packageSize','expiryDate'].includes(f));
@@ -3929,6 +4076,7 @@ function openEditItem(id){
   setVal('mf-category',ITEM_CATEGORIES.includes(it.cat)?it.cat:'其他');
   setVal('mf-package-type',it.packageType||'');
   setVal('mf-exp',it.expiryDate||'');
+  setFormShelfLife('mf',it.openedShelfLife);
   const badge=document.getElementById('mf-detect-badge');if(badge)badge.innerHTML='';
   // 编辑时隐藏「购买数量/录入状态」这类只在首次录入才有意义的字段
   toggleIntakeOnlyRows(false);
@@ -3969,6 +4117,15 @@ function confirmAdd(){
   const location=isManual?(document.getElementById('mf-location').value||null):(document.getElementById('fi-location')?.value||null);
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
+  const prefix=isManual?'mf':'fi';
+  const lifeInput=document.getElementById(`${prefix}-open-life`);
+  const rawLife=lifeInput.value.trim();
+  const openedShelfLife=normalizeOpenedShelfLife({value:rawLife,unit:document.getElementById(`${prefix}-open-life-unit`).value});
+  if(lifeInput.validity.badInput||(rawLife&&!openedShelfLife)){
+    showError('开封后保质期请填写正整数，最长支持 100 年；也可留空');
+    lifeInput.focus();
+    return;
+  }
   const addSource=isManual?'manual':(_currentRecognitionReviewType==='order'&&window._orderItems?'order':'photo');
 
   // 编辑已存物品：只改基础字段，保留库存/开封/日志/用量等运行时状态
@@ -3983,6 +4140,7 @@ function confirmAdd(){
       it.packageSize=size;
       it.unit=formUnit||it.unit;
       it.expiryDate=exp||null;
+      it.openedShelfLife=openedShelfLife;
       if(du&&du.substitutes)it.substitutes=du.substitutes;
       save();
       trackEvent('item_edit',{itemId:it.id,cat:it.cat});
@@ -4005,7 +4163,7 @@ function confirmAdd(){
     id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:finalCategory,packageType,
     packageSize:size,unit:finalUnit,activePercent:startsOpened?100:0,openCount:startsOpened?1:0,stockCount:startsOpened?Math.max(0,qty-1):qty,
     dailyUse:d.daily,color:d.color,shape:d.shape,
-    expiryDate:exp||null,openedDate:startsOpened?today():null,location:location||null,
+    expiryDate:exp||null,openedShelfLife,openedDate:startsOpened?today():null,location:location||null,
     logs,
     openItems:startsOpened?[100]:[],
     openedDates:startsOpened?[today()]:[]
@@ -4021,6 +4179,7 @@ function confirmAdd(){
     unit:newItem.unit,
     qty,
     expiryDate:newItem.expiryDate,
+    openedShelfLife:newItem.openedShelfLife,
     location:newItem.location,
     startsOpened,
     cat:newItem.cat
@@ -4065,6 +4224,7 @@ function clearIntakeForms(){
   setVal('mf-package-type','');setVal('fi-package-type','');
   // 单位回默认 ml，并收起「其他」手输框
   setFormUnit('mf','ml');setFormUnit('fi','ml');
+  setFormShelfLife('mf',null);setFormShelfLife('fi',null);
   // 清识别徽标
   const mb=document.getElementById('mf-detect-badge');if(mb)mb.innerHTML='';
   const fb=document.getElementById('detected-cat-badge');if(fb)fb.innerHTML='';
