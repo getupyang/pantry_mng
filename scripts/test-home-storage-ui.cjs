@@ -1,0 +1,170 @@
+// All API calls mocked, including when run against production. No user inventory accessed.
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+for(const m of fs.readFileSync('pantry.html','utf8').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(m[1]);
+const base=process.env.PANTRY_TEST_BASE_URL||'http://127.0.0.1:8031/pantry.html';
+async function screen(page,id){await page.waitForFunction(id=>document.querySelectorAll('.screen.active').length===1&&document.getElementById(id).classList.contains('active'),id);}
+async function flush(page){await page.evaluate(async()=>{clearTimeout(cloudSyncTimer);await pushCloudNow();});}
+(async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Asia/Tokyo'});
+  await page.clock.setFixedTime(new Date('2026-11-17T10:00:00+09:00'));
+  await page.addInitScript(()=>localStorage.setItem('pantry_deduct_v4',String(Date.now())));
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  let data={items:[],locations:['浴室抽屉','储物柜']},version=1,modelCalls=0;
+  await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({status:204,body:''}));
+  await page.route('https://fonts.gstatic.com/**',r=>r.fulfill({status:204,body:''}));
+  await page.route('**/api/**',async r=>{
+   const req=r.request(),path=new URL(req.url()).pathname;let result={ok:true};
+   if(path==='/api/families/ensure')result={familyId:'home-storage-test',data,version};
+   else if(path==='/api/families/home-storage-test'){
+    if(req.method()==='PUT'){data=req.postDataJSON().data;version++;}
+    result={familyId:'home-storage-test',data,version};
+   }else if(path==='/api/openrouter'){modelCalls++;throw new Error('Unexpected model request');}
+   await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await page.goto(base);await page.waitForFunction(()=>cloudReady);
+  await page.evaluate(()=>nav('scr-add'));await screen(page,'scr-add');
+  assert.equal(await page.locator('#mf-opened-row').isVisible(),false);
+  await page.locator('#mf-name').fill('专业防晒乳');
+  await page.locator('#mf-nickname').fill('我的通勤防晒');
+  await page.locator('#mf-size').fill('50');await page.locator('#mf-qty').fill('3');
+  await page.locator('#mf-package-type').selectOption('regular');
+  await page.locator('#mf-location').selectOption('浴室抽屉');
+  await page.locator('#mf-exp').fill('2028-01-01');await page.locator('#mf-open-life').fill('1');
+  await page.locator('.intake-option:has(input[name="mf-open-state"][value="open"])').click();
+  assert.equal(await page.locator('#mf-opened-date').inputValue(),'2026-11-17');
+  await page.locator('#mf-opened-date').fill('2026-11-18');await page.locator('#confirm-btn').click();
+  assert.equal(await page.evaluate(()=>items.length),0,'future opening date blocks save');
+  await page.locator('#mf-opened-date').fill('2026-11-01');await page.locator('#confirm-btn').click();await screen(page,'scr-home');
+  const id=await page.evaluate(()=>items[0].id);
+  assert.deepEqual(await page.evaluate(()=>({nickname:items[0].nickname,dates:items[0].openedDates,stock:items[0].stockCount})),{nickname:'我的通勤防晒',dates:['2026-11-01'],stock:2});
+  await page.evaluate(()=>switchTab(1));
+  const group=page.locator('.inventory-group').filter({has:page.locator('h2',{hasText:'防晒'})});
+  assert.match(await group.locator('.inventory-group-head').textContent(),/共 3 件.*已开封 1 · 未开封 2/);
+  assert.equal(await group.locator('.gcard').count(),2,'one record projected into both areas');
+  assert.match(await group.locator('[data-state="open"]').textContent(),/我的通勤防晒.*已开封 1 件.*14 天/s);
+  assert.match(await group.locator('[data-state="stock"]').textContent(),/未开封 2 件.*浴室抽屉/s);
+  assert.doesNotMatch(await group.locator('[data-state="stock"] .gcard-expiry').textContent(),/开封期限/);
+  await group.locator('[data-state="stock"]').click();await screen(page,'scr-detail');
+  assert.equal(await page.locator('#d-v').textContent(),'未开封');
+  assert.equal(await page.locator('#d-expiry-date').textContent(),'2028-01-01');
+  assert.match(await page.locator('.d-original-name').textContent(),/专业防晒乳/);
+  await page.getByRole('button',{name:/查看台面的已开封/}).click();
+  assert.equal(await page.locator('#d-opened-date').textContent(),'2026-11-01');
+  await page.locator('#d-expiry-section').getByRole('button',{name:'修改',exact:true}).click();
+  await page.locator('#edit-opened-date').fill('2026-10-20');await page.locator('#sh-ok').click();
+  assert.equal(await page.locator('#d-expiry-date').textContent(),'2026-11-19');
+  assert.equal(await page.evaluate(()=>items[0].stockCount),2);
+  await page.getByRole('button',{name:'再开一件',exact:true}).click();
+  await page.locator('#take-opened-date').fill('2026-11-05');
+  assert.match(await page.locator('#take-expiry-preview').textContent(),/2026-12-05/);
+  await page.locator('#sh-ok').click();
+  assert.deepEqual(await page.evaluate(()=>items[0].openedDates),['2026-10-20','2026-11-05']);
+  assert.equal(await page.locator('#d-opened-date').textContent(),'2026-11-05','newly opened piece selected');
+  await page.locator('#d-expiry-section').getByRole('button',{name:'修改',exact:true}).click();
+  await page.locator('#edit-opened-date').fill('');await page.locator('#sh-ok').click();
+  assert.deepEqual(await page.evaluate(()=>items[0].openedDates),['2026-10-20',null]);
+  assert.match(await page.locator('#d-expiry-note').textContent(),/未记录/);
+  await page.locator('#d-expiry-section').getByRole('button',{name:'补填',exact:true}).click();
+  await page.locator('#edit-opened-date').fill('2026-11-03');await page.locator('#sh-ok').click();
+  await page.locator('.d-edit-btn').click();await screen(page,'scr-add');
+  assert.equal(await page.locator('#mf-nickname').inputValue(),'我的通勤防晒');
+  assert.equal(await page.locator('#mf-opened-row').isVisible(),false);
+  assert.equal(await page.locator('#mf-location').inputValue(),'浴室抽屉');
+  const hostile='<img src=x onerror="window.aliasExecuted=true">';
+  await page.locator('#mf-nickname').fill(hostile);await page.locator('#confirm-btn').click();await screen(page,'scr-detail');
+  assert.equal(await page.locator('.d-name').textContent(),hostile);
+  assert.equal(await page.locator('.d-name img').count(),0);
+  assert.equal(await page.evaluate(()=>!!window.aliasExecuted),false);
+  await page.locator('.d-edit-btn').click();await screen(page,'scr-add');
+  await page.locator('#mf-nickname').fill('');await page.locator('#confirm-btn').click();await screen(page,'scr-detail');
+  assert.equal(await page.locator('.d-name').textContent(),'专业防晒乳','clearing alias restores original name');
+  await page.locator('.d-edit-btn').click();await screen(page,'scr-add');
+  await page.locator('#mf-nickname').fill('全家的防晒备用与通勤日常使用');await page.locator('#confirm-btn').click();await screen(page,'scr-detail');
+  await flush(page);
+  assert.equal(data.items[0].nickname,'全家的防晒备用与通勤日常使用');
+  assert.deepEqual(data.items[0].openedDates,['2026-10-20','2026-11-03']);
+  await page.evaluate(()=>localStorage.removeItem(PANTRY_ITEMS_KEY));await page.reload();await page.waitForFunction(()=>cloudReady);
+  assert.equal(await page.evaluate(()=>items[0].nickname),'全家的防晒备用与通勤日常使用');
+  await page.evaluate(()=>openEditItem(items[0].id));await screen(page,'scr-add');
+  assert.equal(await page.locator('#mf-location').inputValue(),'浴室抽屉','fresh-load edit must retain location');
+  await page.locator('#confirm-btn').click();await screen(page,'scr-detail');
+  assert.equal(await page.evaluate(()=>items[0].location),'浴室抽屉');
+  await page.evaluate(()=>{nav('scr-home');switchTab(0);updateAlert();});await screen(page,'scr-home');
+  assert.match(await page.locator('#alert-text').textContent(),/全家的防晒备用与通勤日常使用/);
+  // Same category totals across records; empty original index 0 must never shift date editing index 1.
+  await page.evaluate(()=>{
+   const original=items[0];original.openItems=[0,60];original.openedDates=['2026-10-20','2026-11-03'];
+   items.push({...structuredClone(original),id:'second',nickname:'旅行备用',openItems:[],openCount:0,openedDates:[],stockCount:2,packageType:'travel'});
+   items.push({...structuredClone(original),id:'supp-only',cat:'洁面',name:'洁面乳',nickname:'',openItems:[],openCount:0,openedDates:[],stockCount:0,supplement:{name:'洁面补充装',stockCount:3,size:500,unit:'ml'}});
+   save();switchTab(1);
+  });
+  assert.match(await group.locator('.inventory-group-head').textContent(),/共 4 件.*已开封 1 · 未开封 3.*已用完 1/);
+  await group.locator('[data-state="open"]').click();await screen(page,'scr-detail');
+  assert.equal(await page.locator('#d-opened-date').textContent(),'2026-11-03');
+  await page.locator('#d-expiry-section').getByRole('button',{name:'修改',exact:true}).click();
+  await page.locator('#edit-opened-date').fill('2026-11-04');await page.locator('#sh-ok').click();
+  assert.deepEqual(await page.evaluate(()=>items[0].openedDates),['2026-10-20','2026-11-04']);
+  await page.evaluate(()=>{nav('scr-home');switchTab(1);});await screen(page,'scr-home');
+  await page.getByRole('button',{name:'旅行装',exact:true}).click();
+  assert.match(await group.locator('.inventory-group-head').textContent(),/共 2 件.*已开封 0 · 未开封 2/);
+  assert.match(await page.locator('.inventory-note').textContent(),/仅统计/);
+  await page.getByRole('button',{name:'全部',exact:true}).click();
+  await page.getByRole('button',{name:'正装',exact:true}).click();
+  assert.equal(await page.locator('[data-state="supplement"]').count(),0,'regular filter excludes legacy refill stock');
+  await page.getByRole('button',{name:'补充装',exact:true}).click();
+  assert.equal(await page.locator('[data-state="supplement"]').count(),1,'refill filter includes legacy refill stock');
+  assert.match(await page.locator('#gallery-body .inventory-group-head').textContent(),/共 3 件.*已开封 0 · 未开封 3/);
+  await page.getByRole('button',{name:'全部',exact:true}).click();
+  assert.equal(await page.locator('[data-state="supplement"]').count(),1);
+  assert.match(await page.locator('[data-state="supplement"]').textContent(),/补充装.*未开封 3 件/s);
+  await page.locator('[data-state="supplement"]').click();await screen(page,'scr-detail');
+  assert.match(await page.locator('.d-brand').textContent(),/500ml.*补充装/);
+  assert.equal(await page.locator('#d-pct').textContent(),'库存 3 件');
+  assert.equal(await page.getByRole('button',{name:'开封使用',exact:true}).count(),0,'supplement view must not offer a parent-stock opening action');
+  await page.evaluate(()=>nav('scr-home'));await screen(page,'scr-home');
+  await page.screenshot({path:'/tmp/pantry-home-storage-gallery.png'});
+  // Mobile layout, including long alias, maximum font and narrow viewport.
+  await page.setViewportSize({width:320,height:844});await page.evaluate(()=>applyFontSize('large'));
+  const overflow=await page.locator('.inventory-group,.inventory-group-head,.storage-zone,.gcard').evaluateAll(els=>els.filter(e=>e.getClientRects().length&&e.scrollWidth>e.clientWidth+2).map(e=>e.className));
+  assert.deepEqual(overflow,[],'narrow large-font layout');
+  await page.screenshot({path:'/tmp/pantry-home-storage-narrow.png'});
+  await page.locator('[data-state="stock"]').first().scrollIntoViewIfNeeded();
+  await page.screenshot({path:'/tmp/pantry-home-storage-cabinet.png'});
+  await page.evaluate(()=>{nav('scr-add');});await screen(page,'scr-add');
+  assert.equal(await page.locator('#mf-nickname').inputValue(),'');assert.equal(await page.locator('#mf-opened-date').inputValue(),'');
+  // Recognition confirmation is populated with fixtures; no real model call, batch reset verified.
+  await page.evaluate(()=>{
+   window._orderItems=[{name:'订单洁面',packageSize:100,unit:'ml',qty:2},{name:'订单防晒',packageSize:50,unit:'ml',qty:1}];window._currentOrderIndex=0;
+   fillOrderRecognitionResult(window._orderItems[0],2);
+  });
+  await page.locator('#fi-nickname').fill('旅行用洁面');
+  await page.locator('#fi-package-type').selectOption('travel');
+  await page.locator('.intake-option:has(input[name="fi-open-state"][value="open"])').click();
+  await page.locator('#fi-opened-date').fill('2026-11-02');await page.locator('#confirm-btn').click();
+  assert.equal(await page.evaluate(()=>items.at(-1).nickname),'旅行用洁面');
+  assert.equal(await page.evaluate(()=>items.at(-1).openedDates[0]),'2026-11-02');
+  assert.equal(await page.locator('#fi-nickname').inputValue(),'');
+  assert.equal(await page.locator('#fi-opened-date').inputValue(),'');
+  assert.equal(await page.locator('#fi-opened-row').isVisible(),false);
+  await page.locator('#fi-package-type').selectOption('regular');await page.locator('#confirm-btn').click();await screen(page,'scr-home');
+  assert.equal(await page.evaluate(()=>items.at(-1).nickname),'');assert.equal(await page.evaluate(()=>items.at(-1).openCount),0);
+  assert.equal(modelCalls,0);assert.deepEqual(errors,[]);
+  console.log('PASS: grouped counts, state-specific cards/detail/expiry, empty exclusion, legacy supplement, filter; nickname intake/edit/clear/XSS/reset/cloud; past/future/unknown/per-piece opening dates and countdown; 320/390px layout; no model calls');
+  // iOS fallback validation uses real controls under an iPhone user agent.
+  const ios=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}});
+  await ios.route('https://fonts.googleapis.com/**',r=>r.fulfill({status:204,body:''}));
+  await ios.route('https://fonts.gstatic.com/**',r=>r.fulfill({status:204,body:''}));
+  await ios.route('**/api/**',r=>r.fulfill({status:503,body:'{}'}));
+  await ios.goto(base);await ios.evaluate(()=>nav('scr-add'));await screen(ios,'scr-add');
+  await ios.locator('.intake-option:has(input[name="mf-open-state"][value="open"])').click();
+  assert.equal(await ios.locator('#mf-opened-date').getAttribute('type'),'text');
+  await ios.locator('#mf-opened-date').fill('20260230');
+  assert.equal(await ios.evaluate(()=>readOpeningDate('mf-opened-date')),undefined);
+  await ios.locator('#mf-opened-date').fill('20261101');
+  assert.equal(await ios.evaluate(()=>readOpeningDate('mf-opened-date')),'2026-11-01');
+  console.log('PASS: iOS user-agent compact date fallback and invalid-date rejection (not a real Safari test)');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

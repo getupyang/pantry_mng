@@ -27,7 +27,7 @@ async function sunscreenOrder(page) {
     const labels = [...document.querySelectorAll('#gallery-body .cat-label')];
     const label = labels.find(el => el.textContent.trim() === '防晒');
     if (!label) return null;
-    const grid = label.nextElementSibling;
+    const grid = label.closest('.inventory-group');
     return [...grid.querySelectorAll('.gcard-name, .gcard .gcard-name, .gcard [class*="name"]')]
       .map(el => el.textContent.trim())
       .filter(Boolean);

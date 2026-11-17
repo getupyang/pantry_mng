@@ -157,7 +157,29 @@ input,textarea,.finput,.rate-inp{
    GALLERY TAB
 ════════════════════════════ */
 .cat-label{padding:15px 16px 8px;font-size:var(--f-xs);font-family:'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
-.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 16px 14px;}
+.gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px;}
+.inventory-group{margin:12px 16px 20px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;}
+.inventory-group-head{padding:14px;display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);}
+.inventory-group-head .cat-label{padding:0;font-size:var(--f-md);font-family:inherit;letter-spacing:0;color:var(--text);}
+.inventory-count{font-size:var(--f-base);color:var(--text);}
+.inventory-breakdown{width:100%;font-size:var(--f-sm);color:var(--muted);line-height:1.5;}
+.storage-zone{margin:12px;border-radius:10px;overflow:hidden;}
+.storage-zone-title{padding:10px 12px 0;font-size:var(--f-sm);font-weight:500;}
+.storage-zone.countertop{background:var(--surface2);border-bottom:5px solid var(--border2);}
+.storage-zone.cabinet{background:var(--bg);border:1px solid var(--border2);}
+.storage-zone.finished{border:1px dashed var(--border);color:var(--muted);}
+.storage-zone .gallery-grid{padding-top:16px;}
+.inventory-note{padding:4px 16px;font-size:var(--f-sm);color:var(--muted);line-height:1.5;}
+.inventory-group .gcard{min-width:0;}
+.gcard-name,.gcard-brand,.gcard-cap,.gcard-location,.d-name,.d-brand,.dl-name,.dl-cap{max-width:100%;overflow-wrap:anywhere;}
+.gcard-brand,.gcard-location{text-align:center;}
+.gcard-location{font-size:var(--f-xs);color:var(--muted);}
+.d-original-name{font-size:var(--f-sm);color:var(--muted);overflow-wrap:anywhere;margin:4px 0;}
+.opening-date-control{display:flex;align-items:center;gap:8px;min-width:0;}
+.opening-date-control button{white-space:nowrap;}
+.opening-date-row[hidden]{display:none;}
+.opening-date-input{min-width:0;max-width:100%;}
+@media(min-width:600px){.gallery-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
 
 .gcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 9px 11px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;position:relative;transition:transform .14s;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 6px var(--shadow);}
 .gcard:active{transform:scale(.96);}
@@ -749,6 +771,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       </div>
       <div id="detected-cat-badge"></div>
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="fi-name" value="神仙水 Pitera™" oninput="autoDetectRecognized(this.value)"></div>
+      <div class="frow"><label class="flabel" for="fi-nickname">备注名<small>选填</small></label><input class="finput" id="fi-nickname" maxlength="80" placeholder="如：我的通勤防晒"></div>
       <div class="frow"><label class="flabel" for="fi-category">分类</label><select class="package-select" id="fi-category"></select></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="fi-brand" value="SK-II"></div>
       <div class="frow"><span class="flabel">单件容量</span><input class="finput" id="fi-size" value="250" style="max-width:65px"><select class="funit-select" id="fi-unit" onchange="onUnitSelectChange('fi')"></select><input class="finput" id="fi-unit-custom" placeholder="单位" style="max-width:55px;display:none"></div>
@@ -758,18 +781,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="expiry-fields-title">保质期与开封</div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
-          <label class="intake-option"><input type="radio" name="fi-open-state" value="stock" checked><span>未开封入库</span></label>
-          <label class="intake-option"><input type="radio" name="fi-open-state" value="open"><span>已开封使用</span></label>
+          <label class="intake-option"><input type="radio" name="fi-open-state" onchange="syncOpeningDateField('fi')" value="stock" checked><span>未开封入库</span></label>
+          <label class="intake-option"><input type="radio" name="fi-open-state" onchange="syncOpeningDateField('fi')" value="open"><span>已开封使用</span></label>
         </div>
       </div>
+      <div class="frow opening-date-row" id="fi-opened-row" hidden><label class="flabel" for="fi-opened-date">开封日期</label><input class="finput opening-date-input" id="fi-opened-date" type="date"></div>
       <div class="frow"><label class="flabel" for="fi-exp">包装到期日</label><input class="finput" id="fi-exp" type="date"></div>
       <div class="frow shelf-life-row"><label class="flabel" for="fi-open-life">开封后保质期<small>选填</small></label><div class="shelf-life-control"><input class="finput" id="fi-open-life" type="number" min="1" step="1" inputmode="numeric" placeholder="未填写" aria-describedby="fi-life-hint"><select class="funit-select" id="fi-open-life-unit" aria-label="开封后保质期单位"><option value="month">月</option><option value="day">天</option><option value="year">年</option></select></div></div>
-      <div class="expiry-hint" id="fi-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封录入按今天起算。</div>
+      <div class="expiry-hint" id="fi-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封可补填实际日期；数量多于 1 件时，其余未开封入库。</div>
       </div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="fi-location"><option value="">未填写</option></select></div>
     </div>
     <div class="form-card" id="manual-form">
       <div class="frow"><span class="flabel">品名</span><input class="finput" id="mf-name" placeholder="如：洗发水、牙膏…" oninput="autoDetect(this.value)"></div>
+      <div class="frow"><label class="flabel" for="mf-nickname">备注名<small>选填</small></label><input class="finput" id="mf-nickname" maxlength="80" placeholder="如：我的通勤防晒"></div>
       <div class="frow"><label class="flabel" for="mf-category">分类</label><select class="package-select" id="mf-category"></select></div>
       <div id="mf-detect-badge"></div>
       <div class="frow"><span class="flabel">品牌</span><input class="finput" id="mf-brand" placeholder="品牌名称"></div>
@@ -780,13 +805,14 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;ba
       <div class="expiry-fields-title">保质期与开封</div>
       <div class="frow intake-row"><span class="flabel">录入状态</span>
         <div class="intake-seg">
-          <label class="intake-option"><input type="radio" name="mf-open-state" value="stock" checked><span>未开封入库</span></label>
-          <label class="intake-option"><input type="radio" name="mf-open-state" value="open"><span>已开封使用</span></label>
+          <label class="intake-option"><input type="radio" name="mf-open-state" onchange="syncOpeningDateField('mf')" value="stock" checked><span>未开封入库</span></label>
+          <label class="intake-option"><input type="radio" name="mf-open-state" onchange="syncOpeningDateField('mf')" value="open"><span>已开封使用</span></label>
         </div>
       </div>
+      <div class="frow opening-date-row" id="mf-opened-row" hidden><label class="flabel" for="mf-opened-date">开封日期</label><input class="finput opening-date-input" id="mf-opened-date" type="date"></div>
       <div class="frow"><label class="flabel" for="mf-exp">包装到期日</label><input class="finput" type="date" id="mf-exp"></div>
       <div class="frow shelf-life-row"><label class="flabel" for="mf-open-life">开封后保质期<small>选填</small></label><div class="shelf-life-control"><input class="finput" id="mf-open-life" type="number" min="1" step="1" inputmode="numeric" placeholder="未填写" aria-describedby="mf-life-hint"><select class="funit-select" id="mf-open-life-unit" aria-label="开封后保质期单位"><option value="month">月</option><option value="day">天</option><option value="year">年</option></select></div></div>
-      <div class="expiry-hint" id="mf-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封录入按今天起算。</div>
+      <div class="expiry-hint" id="mf-life-hint">开封后开始计算；1 月按 30 天，1 年按 365 天。已开封可补填实际日期；数量多于 1 件时，其余未开封入库。</div>
       </div>
       <div class="frow"><span class="flabel">库存地点</span><select class="location-select" id="mf-location"><option value="">未填写</option></select></div>
     </div>
@@ -1314,7 +1340,7 @@ function setSortMode(value){
 function openPackageTypeSheet(itemId){
   const item=items.find(it=>it.id===itemId);if(!item)return;
   const options=Object.entries(PACKAGE_TYPES).map(([value,label])=>`<option value="${value}" ${item.packageType===value?'selected':''}>${label}</option>`).join('');
-  openSheet('包装类型',item.name,`<label for="edit-package-type">选择包装类型</label> <select class="package-select" id="edit-package-type"><option value="">请选择</option>${options}</select>`,'保存',()=>{
+  openSheet('包装类型',displayName(item),`<label for="edit-package-type">选择包装类型</label> <select class="package-select" id="edit-package-type"><option value="">请选择</option>${options}</select>`,'保存',()=>{
     const value=document.getElementById('edit-package-type').value;
     if(!validPackageType(value)){showError('请选择包装类型');return;}
     item.packageType=value;
@@ -1823,7 +1849,8 @@ function initLocationSelects(){
   const selects=document.querySelectorAll('.location-select');
   selects.forEach(select=>{
     const currentValue=select.value;
-    select.innerHTML='<option value="">未填写</option>'+locations.map(loc=>`<option value="${loc}">${loc}</option>`).join('');
+    select.replaceChildren(new Option('未填写',''),...locations.map(loc=>new Option(loc,loc)));
+    if(currentValue&&!locations.includes(currentValue))select.add(new Option(currentValue,currentValue));
     if(currentValue)select.value=currentValue;
   });
 }
@@ -1858,6 +1885,74 @@ window.openLocationSelectSheet=function(itemId){
 // ═══════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════
+function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function displayName(item){return (typeof item.nickname==='string'&&item.nickname.trim())||item.name||'新物品';}
+function inventoryCounts(item){
+  const pieces=ensureOpenState(item);
+  const opened=pieces.filter(p=>p>0).length;
+  const empty=pieces.length-opened;
+  const stock=Math.max(0,Number(item.stockCount)||0)+Math.max(0,Number(item.supplement?.stockCount)||0);
+  return {opened,stock,empty,total:opened+stock};
+}
+function inventoryGroupLabel(item){
+  const cat=item.cat||'其他';
+  // Retain explicit fine-grained categories; subdivide historical broad categories only.
+  if(['清洁','口腔','纸品','护肤','护发'].includes(cat)){
+    const name=item.name||'';
+    const kinds=[['洗洁精',/洗洁精/],['洗衣液',/洗衣液/],['洗衣粉',/洗衣粉/],['柔顺剂',/柔顺剂/],['垃圾袋',/垃圾袋/],['洗手液',/洗手液|皂液/],['沐浴露',/沐浴露|沐浴乳/],['牙膏',/牙膏/],['牙刷',/牙刷/],['漱口水',/漱口水/],['抽纸',/抽纸|面巾纸/],['卷纸',/卷纸|卫生纸/]];
+    const allowed=cat==='清洁'?['洗洁精','洗衣液','洗衣粉','柔顺剂','垃圾袋','洗手液','沐浴露']:cat==='口腔'?['牙膏','牙刷','漱口水']:cat==='纸品'?['抽纸','卷纸']:[];
+    const kind=kinds.find(([kind,re])=>allowed.includes(kind)&&re.test(name));
+    if(kind)return kind[0];
+    const detected=detectItem(name);
+    if(['护肤','护发'].includes(cat)&&detected&& !['清洁','口腔','纸品','护肤','护发','其他'].includes(detected.cat))return detected.cat;
+  }
+  return cat;
+}
+function groupInventory(source){
+  const groups=new Map();
+  source.forEach(item=>{
+    const cat=inventoryGroupLabel(item);
+    if(!groups.has(cat))groups.set(cat,{cat,items:[],opened:0,stock:0,empty:0,total:0});
+    const group=groups.get(cat),counts=inventoryCounts(item);
+    group.items.push(item);
+    for(const key of ['opened','stock','empty','total'])group[key]+=counts[key];
+  });
+  return [...groups.values()];
+}
+function inventoryView(item,zone){
+  ensureOpenState(item);
+  const indices=item.openItems.map((_,i)=>i).filter(i=>zone==='open'?item.openItems[i]>0:item.openItems[i]===0);
+  if(zone==='stock'||zone==='supplement')return {...item,openItems:[],openCount:0,openedDates:[],openedDate:null,activePercent:100,
+    stockCount:zone==='supplement'?item.supplement.stockCount:item.stockCount,supplement:null,
+    ...(zone==='supplement'?{packageSize:item.supplement.size,unit:item.supplement.unit}:{} )};
+  return {...item,openItems:indices.map(i=>item.openItems[i]),openCount:indices.length,openedDates:indices.map(i=>item.openedDates[i]),stockCount:0,supplement:null};
+}
+function validOpeningDate(value,allowEmpty=false,asOf=today()){
+  return (!value&&allowEmpty)||(dateOrdinal(value)!==null&&dateOrdinal(value)<=dateOrdinal(asOf));
+}
+function readOpeningDate(id,allowEmpty=false){
+  const input=document.getElementById(id);
+  const raw=input.value.trim();
+  // iOS text fallback accepts compact YYYYMMDD as well as ISO date-only values.
+  const value=/^\d{8}$/.test(raw)?raw.slice(0,4)+'-'+raw.slice(4,6)+'-'+raw.slice(6):raw;
+  if(input.validity.badInput||!validOpeningDate(value,allowEmpty)){
+    showError('请填写真实的开封日期，不能晚于今天'+(allowEmpty?'；不确定可留空':''));input.focus();return undefined;
+  }
+  return value||null;
+}
+function setupOpeningDateInput(input,value){
+  input.value=value||'';input.max=today();
+  if(/iP(hone|od|ad)/.test(navigator.userAgent)){
+    input.type='text';input.placeholder='YYYYMMDD';input.inputMode='numeric';
+  }
+}
+function syncOpeningDateField(prefix){
+  const opened=document.querySelector(`input[name="${prefix}-open-state"]:checked`)?.value==='open';
+  const row=document.getElementById(`${prefix}-opened-row`);
+  row.hidden=!!_editingItemId||!opened;
+  const input=document.getElementById(`${prefix}-opened-date`);
+  if(opened&&!input.value)setupOpeningDateInput(input,today());
+}
 function ensureOpenState(item){
   if(!item)return[];
   const rawCount=Number(item.openCount);
@@ -1962,10 +2057,10 @@ function renderExpiryDetails(item,index=null){
   const color=info?.cls==='urgent'?' red':info?.cls==='soon'?' amber':'';
   const row=(label,value,id='',cls='')=>`<div class="d-row"><span class="d-row-label">${label}</span><span class="d-row-val${cls}"${id?` id="${id}"`:''}>${value}</span></div>`;
   let note=summary.missingOpenedDate?'开封日期未记录，暂无法计算开封期限。'+(info?'当前暂按包装到期日显示。':''):'';
-  if(!opened&&normalizeOpenedShelfLife(item.openedShelfLife))note='点击「开封使用」后，按当天开始计算开封期限。';
+  if(!opened&&normalizeOpenedShelfLife(item.openedShelfLife))note='点击「开封使用」时可选择实际开封日期。';
   return `<div class="d-sec-title">${opened?'当前件 · 保质期与开封':'保质期与开封'}</div>`+
     row('当前状态',empty?'已用完':opened?'使用中':'未开封')+
-    (opened?row('开封日期',date||'未记录'):'')+
+    (opened?row('开封日期',`<span class="opening-date-control"><span id="d-opened-date">${date||'未记录'}</span><button type="button" class="d-act-btn" onclick="openEditOpeningDate('${item.id}',${index})">${date?'修改':'补填'}</button></span>`):'')+
     row('包装到期日',dateOrdinal(item.expiryDate)!==null?item.expiryDate:'未填写')+
     row('开封后保质期',shelfLifeLabel(item.openedShelfLife))+
     row(opened?'当前件到期日':'到期日期',info?.date||'—','d-expiry-date',color)+
@@ -1995,8 +2090,8 @@ function updateAlert(){
   const lows=items.filter(i=>getStatus(i).isLow);
   const exps=items.filter(i=>getStatus(i).exp==='urgent');
   const el=document.getElementById('alert-banner'),tx=document.getElementById('alert-text');
-  if(lows.length){el.className='alert red';el.style.display='flex';tx.textContent=lows.map(i=>i.name).join('、')+' 需要补货';}
-  else if(exps.length){el.className='alert amber';el.style.display='flex';tx.textContent=exps.map(i=>i.name).join('、')+' 即将到期';}
+  if(lows.length){el.className='alert red';el.style.display='flex';tx.textContent=lows.map(displayName).join('、')+' 需要补货';}
+  else if(exps.length){el.className='alert amber';el.style.display='flex';tx.textContent=exps.map(displayName).join('、')+' 即将到期';}
   else el.style.display='none';
 }
 
@@ -2111,7 +2206,7 @@ function renderDashboard(){
       h+=`<div class="alert-item" onclick="openDetail('${item.id}')">
         <div class="alert-item-icon">${getSVG(item,36,48)}</div>
         <div class="alert-item-info">
-          <div class="alert-item-name">${item.name} <span style="font-size:var(--f-sm);color:var(--muted)">${item.brand}</span></div>
+          <div class="alert-item-name">${escapeHTML(displayName(item))} <span style="font-size:var(--f-sm);color:var(--muted)">${item.brand}</span></div>
           <div class="alert-item-reason">${reason}</div>
         </div>
         ${tag}
@@ -2122,7 +2217,9 @@ function renderDashboard(){
   // All items list
   h+=`<div class="dash-sec-title" style="margin-top:8px">所有物品</div>
   <div class="dash-list">`;
-  items.forEach(item=>{
+  groupInventory(items).forEach(group=>{
+    h+=`<div class="inventory-group-head"><span class="cat-label">${escapeHTML(group.cat)}</span><span class="inventory-count">共 ${group.total} 件</span><div class="inventory-breakdown">已开封 ${group.opened} · 未开封 ${group.stock}${group.empty?` · 已用完 ${group.empty}（不计入总数）`:''}</div></div>`;
+    group.items.forEach(item=>{
     const{isLow,exp}=getStatus(item);
     const opened=hasOpenItems(item);
     const pct=opened?getActivePercent(item):100;
@@ -2133,7 +2230,7 @@ function renderDashboard(){
     h+=`<div class="dl-row" onclick="openDetail('${item.id}')">
       <div class="dl-icon">${getSVG({...item,activePercent:pct},28,36)}</div>
       <div class="dl-info">
-        <div class="dl-name">${item.name}</div>
+        <div class="dl-name">${escapeHTML(displayName(item))}</div>
         <div class="dl-cap">${cap}</div>
       </div>
       <div class="dl-bar-wrap">
@@ -2142,6 +2239,7 @@ function renderDashboard(){
       </div>
       <div class="dl-dot ${dotC}"></div>
     </div>`;
+  });
   });
   h+='</div>';
 
@@ -2168,50 +2266,51 @@ function renderGallery(){
     document.getElementById('gallery-body').innerHTML=filterHTML+htmlEmptyIntakeBlock('gallery');
     return;
   }
-  const visibleItems=items.filter(it=>packageFilter==='all'||it.packageType===packageFilter);
+  // A legacy supplement is its own refill package, not its parent's package type.
+  const visibleItems=items.map(it=>{
+    if(packageFilter==='all')return it;
+    const supplement=packageFilter==='refill'?it.supplement:null;
+    if(it.packageType===packageFilter)return {...it,supplement};
+    if(supplement?.stockCount>0)return {...it,openItems:[],openCount:0,openedDates:[],openedDate:null,stockCount:0,supplement};
+    return null;
+  }).filter(Boolean);
   if(visibleItems.length===0){
     document.getElementById('gallery-body').innerHTML=filterHTML+`<div class="package-empty">暂无标记为${packageTypeLabel(packageFilter)}的物品<br>可以在物品详情中补充包装类型。<br><button type="button" onclick="setPackageFilter('all')">查看全部</button></div>`;
     return;
   }
-  const cats={};
-  visibleItems.forEach(it=>{if(!cats[it.cat])cats[it.cat]=[];cats[it.cat].push(it);});
-  let h=filterHTML;
-  for(const[cat,list] of Object.entries(cats)){
-    // 同类内排序：到期模式下最快过期排最前(无保质期排最后)；添加模式保持录入顺序
-    if(sortMode==='expiry')list.sort(compareByExpiry);
-    h+=`<div class="cat-label">${cat}</div><div class="gallery-grid">`;
-    list.forEach(item=>{
-      const{isLow,exp}=getStatus(item);
-      const opened=hasOpenItems(item);
-      let cls='gcard';if(isLow)cls+=' warn-low';else if(exp!=='ok')cls+=' warn-exp';
-      const badges=[
-        !opened&&item.stockCount>0?'<span class="bdg g">未开</span>':'',
-        isLow?'<span class="bdg r">补货</span>':'',
-        exp==='urgent'?'<span class="bdg a">到期</span>':'',
-        exp==='soon'?`<span class="bdg a" style="background:var(--amber-l);color:var(--amber);border:1px solid rgba(138,94,20,.22)">临期</span>`:'',
-        item.openCount>1?`<span class="bdg g">×${item.openCount}开</span>`:'',
-      ].join('');
-      const sc=item.stockCount+(item.supplement?.stockCount||0);
-      const pip=sc>0?`<div class="stock-pip has">+${sc}</div>`:(isLow?`<div class="stock-pip none">缺</div>`:'');
-      const avgPct=opened?getActivePercent(item):100;
-      const isEmpty=opened&&getRemain(item)===0;
-      h+=`<div class="${cls}" onclick="openDetail('${item.id}')">
-        ${badges?`<div class="gcard-badges">${badges}</div>`:''}
-        <div style="text-align:center">
-          <div class="gcard-name">${item.name}</div>
-          <div class="gcard-brand">${item.brand}</div>
-          <div class="package-label">${packageTypeLabel(item.packageType)}</div>
-        </div>
-        <div class="illus-wrap" id="illus-${item.id}" data-id="${item.id}" style="width:64px;height:106px">
-          ${getSVG({...item,activePercent:avgPct},64,106)}${pip}
-        </div>
-        <div class="gcard-cap${isLow?' low':isEmpty?' empty':''}">${opened?(isEmpty?'已用完':capStr(item)):`库存 ${item.stockCount}件`}</div>
-        ${renderExpiryCard(item)}
-      </div>`;
-    });
-    h+='</div>';
+  let h=filterHTML+`<div class="inventory-note">${packageFilter==='all'?'按分类整理，件数不含已用完的空件。':'当前件数仅统计「'+escapeHTML(packageTypeLabel(packageFilter))+'」筛选结果。'}</div>`;
+  for(const group of groupInventory(visibleItems)){
+    h+=`<section class="inventory-group"><div class="inventory-group-head"><h2 class="cat-label">${escapeHTML(group.cat)}</h2><span class="inventory-count">共 ${group.total} 件</span><div class="inventory-breakdown">已开封 ${group.opened} · 未开封 ${group.stock}${group.empty?` · 已用完 ${group.empty}（不计入总数）`:''}</div></div>`;
+    const entries=zone=>group.items.filter(it=>zone==='open'?inventoryCounts(it).opened:zone==='stock'?inventoryCounts(it).stock:(inventoryCounts(it).empty||inventoryCounts(it).total===0))
+      .flatMap(it=>zone==='stock'?[...(it.stockCount>0?[{item:it,zone:'stock'}]:[]),...(it.supplement?.stockCount>0?[{item:it,zone:'supplement'}]:[])]:[{item:it,zone}]);
+    for(const [zone,label,cls] of [['open','台面 · 已开封','countertop'],['stock','收纳 · 未开封','cabinet'],['empty','已用完 / 无库存 · 待整理','finished']]){
+      const list=entries(zone);
+      if(!list.length)continue;
+      if(sortMode==='expiry')list.sort((a,b)=>compareByExpiry(inventoryView(a.item,a.zone),inventoryView(b.item,b.zone)));
+      h+=`<div class="storage-zone ${cls}" data-zone="${zone}"><div class="storage-zone-title">${label}</div><div class="gallery-grid">${list.map(entry=>renderInventoryCard(entry.item,entry.zone)).join('')}</div></div>`;
+    }
+    h+='</section>';
   }
   document.getElementById('gallery-body').innerHTML=h;
+}
+
+function renderInventoryCard(item,zone){
+  const view=inventoryView(item,zone);
+  const opened=zone==='open',empty=zone==='empty';
+  const count=opened||empty?view.openCount:view.stockCount;
+  const info=getExpInfo(view);
+  const pct=opened?getActivePercent(view):empty?0:100;
+  const firstIndex=item.openItems.findIndex(p=>empty?p===0:p>0);
+  const action=(opened||empty)&&firstIndex>=0?`selectOpenItem('${item.id}',${firstIndex})`:`openDetail('${item.id}','${zone==='supplement'?'supplement':'stock'}')`;
+  const label=empty?(count?'已用完':'无库存'):opened?'已开封':'未开封';
+  return `<div class="gcard${info&&info.cls!=='ok'?' warn-exp':''}" onclick="${action}" data-item-id="${escapeHTML(item.id)}" data-state="${zone}">
+    <div style="text-align:center;min-width:0;max-width:100%"><div class="gcard-name">${escapeHTML(displayName(item))}${zone==='supplement'?' · 补充装':''}</div>
+      <div class="gcard-brand">${escapeHTML(item.brand)}</div><div class="package-label">${zone==='supplement'?'补充装':packageTypeLabel(item.packageType)}</div></div>
+    <div class="illus-wrap" style="width:64px;height:106px">${getSVG({...view,activePercent:pct},64,106)}</div>
+    <div class="gcard-cap">${empty&&!count?label:label+' '+count+' 件'}${opened?` · 余 ${getRemain(view)}${escapeHTML(view.unit)}`:''}</div>
+    ${!opened&&!empty?`<div class="gcard-location">${escapeHTML(item.location||'收纳位置未填写')}</div>`:''}
+    ${empty?'':renderExpiryCard(view)}
+  </div>`;
 }
 
 function renderExpiryCard(item){
@@ -2343,25 +2442,30 @@ function refreshGCard(item){
 
 // 选中单件的索引（每个item独立）
 let selectedOpenIndex={};
+let currentDetailZone='open';
 
 // ═══════════════════════════════════════════════
 //  DETAIL
 // ═══════════════════════════════════════════════
-function openDetail(id){
+function openDetail(id,zone='open'){
+  currentDetailZone=zone;
   const item=items.find(i=>i.id===id);if(!item)return;
   ensureOpenState(item);
   // 初始化选中索引
   if(selectedOpenIndex[id]===undefined)selectedOpenIndex[id]=0;
   if(selectedOpenIndex[id]>=item.openItems.length)selectedOpenIndex[id]=Math.max(0,item.openItems.length-1);
   const currentIndex=selectedOpenIndex[id];
-  const opened=item.openItems.length>0;
+  const opened=item.openItems.length>0&&!['stock','supplement'].includes(zone);
+  const detailItem=opened?item:inventoryView(item,zone==='supplement'?'supplement':'stock');
   const currentPct=opened?(item.openItems[currentIndex]||0):100;
   
-  document.getElementById('d-title').textContent=item.name;
+  document.getElementById('d-title').textContent=displayName(item);
   const{isLow,exp}=getStatus(item);
   const days=opened?getDays(item):null;
   const isEmpty=opened&&getRemain(item)===0;
-  const openActionHTML=opened
+  const openActionHTML=zone==='supplement'
+    ? `<button type="button" class="d-act-btn" onclick="openDetail('${item.id}')">查看正装与使用区</button>`
+    : opened
     ? `${currentPct===100?`<button class="d-act-btn" onclick="openPutBack('${item.id}')">放回库存</button>`:`<button class="d-act-btn danger" onclick="openRemoveCurrent('${item.id}')">${currentPct===0?'移除空件':'移除这件'}</button>`}
        ${item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">${isEmpty?'取出新件 →':'再开一件'}</button>`:''}`
     : `${item.stockCount>0?`<button class="d-act-btn primary" onclick="openTake('${item.id}')">开封使用</button>`:''}`;
@@ -2370,7 +2474,7 @@ function openDetail(id){
     const isEmptyItem=pct===0;
     const isSelected=i===currentIndex;
     return `<div class="ob-chip${isEmptyItem?' ob-chip-e':''}${isSelected?' ob-chip-selected':''}" onclick="selectOpenItem('${id}',${i})" style="cursor:pointer;${isSelected?'border:1.5px solid var(--green);background:var(--green-l);':''}"><div class="ob-dot${isEmptyItem?' e':''}"></div><span>${isEmptyItem?'空':pct+'%'}</span></div>`;
-  }).join(''):'<div class="ob-empty">还没有开封。库存取出后才开始记录余量和开封日。</div>';
+  }).join(''):(item.openItems.length?`<button type="button" class="d-act-btn" onclick="openDetail('${item.id}')">查看台面的已开封物品（${inventoryCounts(item).opened} 件在用）</button>`:'<div class="ob-empty">还没有开封。库存取出后才开始记录余量和开封日。</div>');
 
   const shelfHTML=Array.from({length:item.stockCount},(_,i)=>`
     <div class="shelf-item" onclick="openTake('${item.id}')">
@@ -2397,15 +2501,16 @@ function openDetail(id){
       <div class="d-illus-hint">${opened?'↕ 拖动':'未开封'}</div>
     </div>
     <div style="flex:1;min-width:0">
-      <div class="d-name">${item.name}</div>
-      <div class="d-brand">${item.brand} · ${item.packageSize}${item.unit}</div>
+      <div class="d-name">${escapeHTML(displayName(item))}</div>
+      ${item.nickname?.trim()?`<div class="d-original-name">原品名：${escapeHTML(item.name)}</div>`:''}
+      <div class="d-brand">${escapeHTML(item.brand)} · ${detailItem.packageSize}${escapeHTML(detailItem.unit)}${zone==='supplement'?' · 补充装':''}</div>
       <div class="d-val-row">
         <span class="d-val-big${opened?(isLow?' low':currentPct===0?' empty':''):' state'}" id="d-v">${opened?(currentPct===0?'空':+(item.packageSize*currentPct/100).toFixed(1)):'未开封'}</span>
         ${opened&&currentPct>0?`<span class="d-val-unit">/</span><span class="d-val-total">${item.packageSize}${item.unit}</span>`:''}
       </div>
-      <div class="d-val-pct" id="d-pct">${opened?`${currentPct}%`:`库存 ${item.stockCount} 件`}</div>
+      <div class="d-val-pct" id="d-pct">${opened?`${currentPct}%`:`库存 ${detailItem.stockCount} 件`}</div>
       <div class="usage-area">
-        <div class="usage-label">使用区（${item.openCount}件）</div>
+        <div class="usage-label">台面 · 已开封（${item.openCount}件）</div>
         <div class="ob-row">${obHTML}</div>
         <div class="d-action-btns">
           ${openActionHTML}
@@ -2414,9 +2519,9 @@ function openDetail(id){
 </div>
 
   </div>
-  <div class="d-sec" id="d-expiry-section">${renderExpiryDetails(item,opened?currentIndex:null)}</div>
+  <div class="d-sec" id="d-expiry-section">${renderExpiryDetails(detailItem,opened?currentIndex:null)}</div>
   <div class="d-sec">
-    <div class="d-sec-title">库存货架（${item.stockCount}件未开封）</div>
+    <div class="d-sec-title">收纳 · 未开封（${item.stockCount}件）</div>
     <div class="shelf">${shelfHTML}</div>
     ${suppHTML}
   </div>
@@ -2496,14 +2601,14 @@ function refreshDetailPage(itemId){
 function refreshDStats(item){
   ensureOpenState(item);
   const expirySection=document.getElementById('d-expiry-section');
-  if(expirySection)expirySection.innerHTML=renderExpiryDetails(item,item.openItems.length?(selectedOpenIndex[item.id]||0):null);
-  if(!item.openItems.length){
+  if(expirySection)expirySection.innerHTML=renderExpiryDetails(['stock','supplement'].includes(currentDetailZone)?inventoryView(item,currentDetailZone):item,item.openItems.length&&!['stock','supplement'].includes(currentDetailZone)?(selectedOpenIndex[item.id]||0):null);
+  if(!item.openItems.length||['stock','supplement'].includes(currentDetailZone)){
     const el=document.getElementById('d-v');
     if(el){
       el.textContent='未开封';
       el.className='d-val-big state';
     }
-    const p=document.getElementById('d-pct');if(p)p.textContent=`库存 ${item.stockCount} 件`;
+    const p=document.getElementById('d-pct');if(p)p.textContent=`库存 ${currentDetailZone==='supplement'?item.supplement.stockCount:item.stockCount} 件`;
     const t=document.getElementById('d-tot');if(t)t.textContent=getTotal(item)+' '+item.unit;
     const d=document.getElementById('d-days');if(d)d.textContent='—';
     return;
@@ -2544,10 +2649,30 @@ function closeSheet(){
   _sheetOK=null;
 }
 
+window.openEditOpeningDate=function(itemId,index){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  ensureOpenState(item);if(index<0||index>=item.openItems.length)return;
+  const previous=item.openedDates[index];
+  openSheet('修改开封日期',`${displayName(item)} · 第 ${index+1} 件`,
+    '<div class="frow"><label class="flabel" for="edit-opened-date">开封日期</label><input class="finput opening-date-input" id="edit-opened-date" type="date"></div><div class="expiry-hint">只修改当前这件。不确定日期可留空；到期提醒会按修改后的日期重新计算。</div>',
+    '保存',()=>{
+      const date=readOpeningDate('edit-opened-date',true);if(date===undefined)return;
+      item.openedDates[index]=date;item.openedDate=item.openedDates.find(Boolean)||null;
+      if(previous!==date)addLog(item,'修改',`第 ${index+1} 件开封日期：${previous||'未记录'} → ${date||'未记录'}`,0);
+      save();closeSheet();openDetail(itemId);updateAlert();
+    });
+  setupOpeningDateInput(document.getElementById('edit-opened-date'),previous);
+};
+window.updateOpeningPreview=function(itemId){
+  const item=items.find(i=>i.id===itemId);if(!item)return;
+  const raw=document.getElementById('take-opened-date').value;
+  const date=/^\d{8}$/.test(raw)?raw.slice(0,4)+'-'+raw.slice(4,6)+'-'+raw.slice(6):raw;
+  const info=validOpeningDate(date)?getExpInfo({...item,openItems:[100],openCount:1,openedDates:[date]},0):null;
+  document.getElementById('take-expiry-preview').textContent=info?`本次开封到期日 ${info.date}（${expirySource(info)}）`:'请填写实际开封日期';
+};
 window.openTake=function(itemId){
   const item=items.find(i=>i.id===itemId);if(!item||item.stockCount===0){closeSheet();return;}
   const alreadyOpened=hasOpenItems(item);
-  const openingPreview=getExpInfo({...item,openItems:[100],openCount:1,openedDates:[today()]},0);
   const shelfLife=normalizeOpenedShelfLife(item.openedShelfLife);
   const body=`
     <div class="qty-row"><span class="qty-label">取出数量</span>
@@ -2558,16 +2683,20 @@ window.openTake=function(itemId){
         <span style="font-size:var(--f-base);color:var(--muted);margin-left:4px">/ 库存 ${item.stockCount} 件</span>
       </div>
     </div>
+    <div class="frow"><label class="flabel" for="take-opened-date">开封日期</label><input class="finput opening-date-input" id="take-opened-date" type="date" oninput="updateOpeningPreview('${itemId}')"></div>
+    <div class="expiry-hint" id="take-expiry-preview"></div>
     <div style="font-size:var(--f-base);color:var(--text2);line-height:1.8">
-      ${alreadyOpened?'取出后加入「使用区」。':'开封后加入「使用区」，并记录今天为首次开封日。'}<br>
-      ${shelfLife?`开封后保质期 ${shelfLifeLabel(shelfLife)}。${openingPreview?`本次开封到期日 ${openingPreview.date}（${expirySource(openingPreview)}）。`:''}<br>`:''}
+      ${alreadyOpened?'取出后加入「使用区」。':'开封后放到台面，记录所选的实际开封日期。'}<br>
+      ${shelfLife?`开封后保质期 ${shelfLifeLabel(shelfLife)}。<br>`:''}同次取出的物品使用同一日期，之后可逐件修改。<br>
       当前已开 <b>${item.openCount}</b> 件。<br>
       取后库存：<span id="tk-aft-s" style="font-family:'DM Mono',monospace">${item.stockCount-1} 件</span> ·
       使用区：<span id="tk-aft-o" style="font-family:'DM Mono',monospace">${item.openCount+1} 件</span>
     </div>`;
-  openSheet(`${alreadyOpened?'取出库存':'开封使用'} · ${item.name}`,`库存 ${item.stockCount} 件`,body,alreadyOpened?'取出':'开封使用',()=>{
+  openSheet(`${alreadyOpened?'取出库存':'开封使用'} · ${displayName(item)}`,`库存 ${item.stockCount} 件`,body,alreadyOpened?'取出':'开封使用',()=>{
+    const openedDate=readOpeningDate('take-opened-date');if(openedDate===undefined)return;
     const n=parseInt(document.getElementById('tk-n').textContent);
     const wasFirstOpen=!hasOpenItems(item);
+    selectedOpenIndex[itemId]=item.openItems.length;
     item.stockCount-=n;
     // 确保openItems数组存在
     if(!item.openItems||!Array.isArray(item.openItems))item.openItems=[];
@@ -2575,14 +2704,16 @@ window.openTake=function(itemId){
     // 新件加入使用区，初始为100%
     for(let i=0;i<n;i++){
       item.openItems.push(100);
-      item.openedDates.push(today());
+      item.openedDates.push(openedDate);
     }
     item.openCount=item.openItems.length;
-    if(!item.openedDate)item.openedDate=today();
+    if(!item.openedDate)item.openedDate=openedDate;
     addLog(item,'开封',`从库存取出 ×${n}`,0);
     trackEvent('item_open',{count:n,firstOpen:wasFirstOpen,stockAfter:item.stockCount,openCount:item.openCount,cat:item.cat});
-    save();closeSheet();openDetail(itemId);
+    save();closeSheet();openDetail(itemId);updateAlert();
   });
+  setupOpeningDateInput(document.getElementById('take-opened-date'),today());
+  updateOpeningPreview(itemId);
 };
 
 window.tkQty=function(d,itemId){
@@ -2606,7 +2737,7 @@ window.openPutBack=function(itemId){
     showError('这件已经记录过消耗，不能放回未开封库存');
     return;
   }
-  openSheet(`放回库存 · ${item.name}`,'撤销这次开封',
+  openSheet(`放回库存 · ${displayName(item)}`,'撤销这次开封',
     `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">这件会从「使用区」移回「库存货架」。适合误触开封、还没有实际使用的情况。</div>`,
     '放回库存',()=>{
       item.openItems.splice(idx,1);
@@ -2630,7 +2761,7 @@ window.openRemoveCurrent=function(itemId){
   const pct=item.openItems[idx]||0;
   const remain=+(item.packageSize*pct/100).toFixed(1);
   const isEmpty=pct===0;
-  openSheet(`${isEmpty?'移除空件':'移除这件'} · ${item.name}`,'',
+  openSheet(`${isEmpty?'移除空件':'移除这件'} · ${displayName(item)}`,'',
     `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">这只会移除当前选中的使用中单件，不会删除商品条目。${isEmpty?'':'当前剩余约 '+remain+item.unit+'，移除后会从总余量扣除。'}</div>`,
     isEmpty?'移除空件':'确认移除',()=>{
       item.openItems.splice(idx,1);
@@ -2659,7 +2790,7 @@ window.openPour=function(itemId){
       <div class="pour-row" style="font-weight:500"><span>倒后余量</span><span class="plus">${+(getRemain(item)+amt).toFixed(1)}/${item.packageSize}${item.unit} (${newPct}%)</span></div>
     </div>
     <div style="font-size:var(--f-sm);color:var(--muted);font-family:'DM Mono',monospace;margin-top:10px">补充装库存 ${supp.stockCount} → ${supp.stockCount-1}${amt<supp.size?`  ⚑ 容器已满，仅倒入${amt}${item.unit}`:''}</div>`;
-  openSheet(`倒入补充装 · ${item.name}`,`${supp.name} ×${supp.stockCount}`,body,'确认倒入',()=>{
+  openSheet(`倒入补充装 · ${displayName(item)}`,`${supp.name} ×${supp.stockCount}`,body,'确认倒入',()=>{
     item.activePercent=newPct;item.supplement.stockCount-=1;
     addLog(item,'补充',`倒入补充装 +${amt}${item.unit}`,amt);
     trackEvent('supplement_pour',{amount:amt,stockAfter:item.supplement.stockCount,cat:item.cat});
@@ -2669,7 +2800,7 @@ window.openPour=function(itemId){
 
 window.openRetire=function(itemId){
   const item=items.find(i=>i.id===itemId);if(!item||item.openCount<=1)return;
-  openSheet(`移除空件 · ${item.name}`,'',
+  openSheet(`移除空件 · ${displayName(item)}`,'',
     `<div style="font-size:var(--f-md);color:var(--text2);line-height:1.8">将一个已用完的件移出使用区。<br>开启数：${item.openCount} → ${item.openCount-1} 件</div>`,
     '确认移除',()=>{
       // 确保openItems数组存在
@@ -2701,7 +2832,7 @@ window.openDeleteSheet=function(itemId){
   const body=`
     <div class="del-preview">
       <div class="del-illus-wrap" id="del-illus">${illusHTML}</div>
-      <div class="del-item-name">${item.name}</div>
+      <div class="del-item-name">${escapeHTML(displayName(item))}</div>
       <div class="del-item-sub">${item.brand} · ${item.packageSize}${item.unit}</div>
       <div class="del-hint">这件东西会从 Pantry 里消失。<br>删除后 4 秒内可以撤销。</div>
     </div>`;
@@ -2814,7 +2945,7 @@ window.openAddStock=function(itemId){
       <span style="font-size:var(--f-base);color:var(--muted);margin-left:4px">件</span>
     </div></div>
     <div style="font-size:var(--f-base);color:var(--text2)">入库后：${item.stockCount} + <span id="as-add">1</span> = <span id="as-tot">${item.stockCount+1}</span> 件</div>`;
-  openSheet(`补入库存 · ${item.name}`,'',body,'确认入库',()=>{
+  openSheet(`补入库存 · ${displayName(item)}`,'',body,'确认入库',()=>{
     const n=parseInt(document.getElementById('as-n').textContent);
     item.stockCount+=n;addLog(item,'入库',`补入 ×${n}件`,item.packageSize*n);
     trackEvent('stock_add',{count:n,stockAfter:item.stockCount,cat:item.cat});
@@ -3065,7 +3196,7 @@ function resetRecognitionIntakeForm(){
   if(recogForm)recogForm.style.display='none';
   if(manualForm)manualForm.style.display='block';
   const values={
-    'fi-name':'','fi-brand':'','fi-size':'','fi-qty':'1','fi-exp':'','fi-package-type':'','fi-location':''
+    'fi-name':'','fi-nickname':'','fi-opened-date':'','fi-brand':'','fi-size':'','fi-qty':'1','fi-exp':'','fi-package-type':'','fi-location':''
   };
   Object.entries(values).forEach(([id,value])=>{
     const element=document.getElementById(id);
@@ -3080,6 +3211,7 @@ function resetRecognitionIntakeForm(){
   if(confidence)confidence.textContent='';
   const stock=document.querySelector('input[name="fi-open-state"][value="stock"]');
   if(stock)stock.checked=true;
+  syncOpeningDateField('fi');
   _lastDetected=null;
 }
 
@@ -4011,6 +4143,8 @@ function setFormShelfLife(prefix,value){
 function fillFormFields(result){
   // 包装类型始终由用户填写，每件订单商品独立选择。
   document.getElementById('fi-package-type').value='';
+  document.getElementById('fi-nickname').value='';
+  document.getElementById('fi-opened-date').value='';
   const detectedFromName=result.name?detectItem(result.name):null;
   suggestCategory(result.name||'','fi-category');
   _lastDetected=detectedFromName;
@@ -4031,6 +4165,7 @@ function fillFormFields(result){
   // 每件识别结果独立确认，尤其不能把上一件的已开封状态带给下一件。
   const stockOption=document.querySelector('input[name="fi-open-state"][value="stock"]');
   if(stockOption)stockOption.checked=true;
+  syncOpeningDateField('fi');
   const confEl=document.querySelector('#recog-result .form-conf');
   if(confEl){
     const missing=(result.missingFields||[]).filter(f=>['name','packageSize','expiryDate'].includes(f));
@@ -4070,6 +4205,12 @@ function openEditItem(id){
   document.getElementById('manual-form').style.display='block';
   const setVal=(eid,v)=>{const el=document.getElementById(eid);if(el)el.value=v;};
   setVal('mf-name',it.name||'');
+  setVal('mf-nickname',it.nickname||'');
+  initLocationSelects();
+  // Preserve legacy locations even when no longer present in the managed list.
+  const locationSelect=document.getElementById('mf-location');
+  if(it.location&&![...locationSelect.options].some(option=>option.value===it.location))locationSelect.add(new Option(it.location,it.location));
+  setVal('mf-location',it.location||'');
   setVal('mf-brand',it.brand||'');
   setVal('mf-size',it.packageSize!=null?String(it.packageSize):'');
   setFormUnit('mf',it.unit||'ml');
@@ -4095,6 +4236,7 @@ function exitEditMode(){
 function toggleIntakeOnlyRows(show){
   ['mf-qty','fi-qty'].forEach(id=>{const el=document.getElementById(id);if(el){const row=el.closest('.frow');if(row)row.style.display=show?'':'none';}});
   document.querySelectorAll('.intake-row').forEach(row=>{row.style.display=show?'':'none';});
+  ['mf','fi'].forEach(syncOpeningDateField);
 }
 
 function confirmAdd(){
@@ -4118,6 +4260,9 @@ function confirmAdd(){
   const openStateName=isManual?'mf-open-state':'fi-open-state';
   const startsOpened=document.querySelector(`input[name="${openStateName}"]:checked`)?.value==='open';
   const prefix=isManual?'mf':'fi';
+  const nickname=document.getElementById(`${prefix}-nickname`).value.trim();
+  const openedDate=!_editingItemId&&startsOpened?readOpeningDate(`${prefix}-opened-date`):null;
+  if(openedDate===undefined)return;
   const lifeInput=document.getElementById(`${prefix}-open-life`);
   const rawLife=lifeInput.value.trim();
   const openedShelfLife=normalizeOpenedShelfLife({value:rawLife,unit:document.getElementById(`${prefix}-open-life-unit`).value});
@@ -4135,6 +4280,8 @@ function confirmAdd(){
       const du=detectItem(name);
       it.name=name||it.name;
       it.brand=brand||'';
+      it.nickname=nickname;
+      it.location=location;
       it.cat=finalCategory;
       it.packageType=packageType;
       it.packageSize=size;
@@ -4149,7 +4296,7 @@ function confirmAdd(){
       nav('scr-home');
       if(activeTab===0)renderDashboard();else renderGallery();
       updateAlert();
-      openDetail(editedId);
+      openDetail(editedId,currentDetailZone);
     }
     return;
   }
@@ -4160,13 +4307,13 @@ function confirmAdd(){
   if(startsOpened)logs.push({type:'开封',desc:'录入时标记已开封',delta:0,date:today()});
 
   const newItem={
-    id:String(Date.now()),name:name||'新物品',brand:brand||'',cat:finalCategory,packageType,
+    id:String(Date.now()),name:name||'新物品',nickname,brand:brand||'',cat:finalCategory,packageType,
     packageSize:size,unit:finalUnit,activePercent:startsOpened?100:0,openCount:startsOpened?1:0,stockCount:startsOpened?Math.max(0,qty-1):qty,
     dailyUse:d.daily,color:d.color,shape:d.shape,
-    expiryDate:exp||null,openedShelfLife,openedDate:startsOpened?today():null,location:location||null,
+    expiryDate:exp||null,openedShelfLife,openedDate:startsOpened?openedDate:null,location:location||null,
     logs,
     openItems:startsOpened?[100]:[],
-    openedDates:startsOpened?[today()]:[]
+    openedDates:startsOpened?[openedDate]:[]
   };
   items.push(newItem);
   const acceptedRecognitionItem={
@@ -4215,7 +4362,7 @@ function confirmAdd(){
 function clearIntakeForms(){
   const setVal=(id,v='')=>{const el=document.getElementById(id);if(el)el.value=v;};
   // 品名、品牌、容量、日期：清空
-  ['mf-name','mf-brand','mf-size','mf-exp','fi-name','fi-brand','fi-size','fi-exp'].forEach(id=>setVal(id));
+  ['mf-name','mf-nickname','mf-opened-date','mf-brand','mf-size','mf-exp','mf-location','fi-name','fi-nickname','fi-opened-date','fi-brand','fi-size','fi-exp','fi-location'].forEach(id=>setVal(id));
   // 数量回默认
   setVal('mf-qty','1');setVal('fi-qty','2');
   // 分类回「其他」
@@ -4231,6 +4378,7 @@ function clearIntakeForms(){
   // 录入状态回「未开封入库」
   const mo=document.querySelector('input[name="mf-open-state"][value="stock"]');if(mo)mo.checked=true;
   const fo=document.querySelector('input[name="fi-open-state"][value="stock"]');if(fo)fo.checked=true;
+  ['mf','fi'].forEach(syncOpeningDateField);
   _lastDetected=null;
 }
 
@@ -4254,7 +4402,7 @@ function runDeduction(){
     item.openCount=item.openItems.length;
     item.activePercent=getActivePercent(item);
     const actual=+(beforeRemain-getRemain(item)).toFixed(1);
-    if(actual>0.05){log.push(`${item.name} −${actual}${item.unit}`);item.logs.push({type:'自动',desc:`每日扣减×${days}天`,delta:-actual,date:today()});}
+    if(actual>0.05){log.push(`${displayName(item)} −${actual}${item.unit}`);item.logs.push({type:'自动',desc:`每日扣减×${days}天`,delta:-actual,date:today()});}
   });
   localStorage.setItem(key,String(now));save();
   if(log.length){document.getElementById('dt-body').textContent=`间隔${days}天 · `+log.join('  ');const t=document.getElementById('deduct-toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000);}
