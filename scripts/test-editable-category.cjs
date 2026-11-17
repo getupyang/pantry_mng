@@ -254,7 +254,7 @@ async function waitForSettledScreen(page, targetId) {
     await waitForSettledScreen(page, 'scr-home');
     const overriddenItemGroup = await page.evaluate(itemName => {
       for (const label of document.querySelectorAll('#gallery-body .cat-label')) {
-        const names = [...(label.nextElementSibling?.querySelectorAll('.gcard-name') || [])]
+        const names = [...(label.closest('.inventory-group')?.querySelectorAll('.gcard-name') || [])]
           .map(node => node.textContent.trim());
         if (names.includes(itemName)) return label.textContent.trim();
       }
